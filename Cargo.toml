@@ -1,0 +1,7 @@
+# Workspace manifest so the app can be built and run from the project root
+# (`cargo build` / `cargo run`) without first `cd`-ing into `src-tauri`. The
+# actual package, build script, and Tauri config live in `src-tauri`.
+[workspace]
+members = ["src-tauri"]
+default-members = ["src-tauri"]
+resolver = "2"

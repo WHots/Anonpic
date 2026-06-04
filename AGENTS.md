@@ -1,0 +1,35 @@
+# Global instructions
+
+## Coding style
+
+- Prefer performance and memory safety.
+- Use Allman-style brackets (opening brace on its own line) for methods, structs, enums, `if`, and `for` loops.
+- Keep comments light. Follow standard Rust commenting: a brief description of intent, plus explicit safety-concern notations (e.g. `// SAFETY:` on `unsafe` blocks). For commenting, don't overdo it inside methods; comments for global variables and types are fine, but for methods the only comment should be to describe the method.
+- When making methods, private-style methods should always be placed under public methods.
+
+## Platform
+
+This project targets Windows only. Do not add cross-platform guards - omit `#[cfg(windows)]` / `#[cfg(not(windows))]` attributes and non-Windows fallback stubs. Assume the Windows API (via `windows-sys`) is always available.
+
+## Creating files
+
+Prompt the user for confirmation before creating any new file. Describe the file's path and purpose, and wait for approval before writing it. Editing existing files does not require this prompt.
+
+## Claude Agent integration
+
+When applying changes in a directory, look for a `CLAUDE.md` file in that directory (and walk up parent directories). If present, read it and follow its development instructions for any changes scoped to that directory. Treat `CLAUDE.md` as authoritative for directory-local conventions alongside any `AGENTS.md`.
+
+When traversing directories to make changes, reference any `CLAUDE.md` files alongside `AGENTS.md` files.
+
+If any design pattern or instruction in a `CLAUDE.md` file contradicts one in an `AGENTS.md` file (or vice versa), do **not** silently pick one. Stop and:
+
+1. List every specific contradiction to the user, citing both files and quoting the conflicting rules.
+2. Ask the user to decide how to proceed, offering three choices:
+   - **CLAUDE** - follow the `CLAUDE.md` rule.
+   - **AGENTS** - follow the `AGENTS.md` rule.
+   - **Other** - the user describes how they want you to proceed instead.
+3. Wait for the user's input before making any changes.
+
+## Agents / Claude editing guide
+
+Prompt the user before changing anything in the `CLAUDE.md` or `AGENTS.md` files, displaying what will be changed. The user should have the option to confirm or deny.

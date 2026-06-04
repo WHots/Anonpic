@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Anonpic</title>
+    <script type="module" src="/src/main.js" defer></script>
+  </head>
+
+  <body>
+    <header class="titlebar">
+      <h1>Anonpic</h1>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button id="tab-capture" class="tab is-active" type="button" role="tab" aria-selected="true" aria-controls="capture-tab">
+        Capture
+      </button>
+      <button id="tab-settings" class="tab" type="button" role="tab" aria-selected="false" aria-controls="settings-tab">
+        Settings
+      </button>
+    </nav>
+
+    <main class="content">
+      <section id="capture-tab" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-capture">
+        <p class="status">Press <span class="key">Print Screen</span> to capture.</p>
+        <button id="capture-now" class="capture-button" type="button">Capture an area now</button>
+      </section>
+
+      <section id="settings-tab" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <form id="settings-form" class="settings">
+          <div class="field">
+            <span>Save directory</span>
+            <div class="dir-row">
+              <input id="save-directory" type="text" placeholder="Default: Images folder" />
+              <button id="browse-directory" type="button">Browse…</button>
+            </div>
+            <button id="restore-directory" type="button" class="restore-button">
+              Restore default location
+            </button>
+          </div>
+          <label class="field">
+            <span>Image format</span>
+            <select id="image-format">
+              <option value="png">PNG</option>
+              <option value="jpeg">JPEG</option>
+              <option value="bmp">BMP</option>
+            </select>
+          </label>
+
+          <fieldset class="field options">
+            <legend>Save &amp; copy options</legend>
+
+            <label class="check">
+              <span class="help" tabindex="0" aria-label="Help: copy to clipboard">
+                ⓘ
+                <span class="tooltip" role="tooltip">
+                  After a capture is grabbed, the cleaned image (metadata stripped) is
+                  copied to your clipboard so you can paste it anywhere.
+                </span>
+              </span>
+              <input id="copy-to-clipboard" type="checkbox" />
+              <span>Copy to clipboard</span>
+            </label>
+
+            <label class="check">
+              <span class="help" tabindex="0" aria-label="Help: auto-save to Images folder">
+                ⓘ
+                <span class="tooltip" role="tooltip">
+                  Automatically save each cleaned capture to your save directory
+                  (the Images folder by default).
+                </span>
+              </span>
+              <input id="auto-save" type="checkbox" />
+              <span>Auto-save to Images folder</span>
+            </label>
+          </fieldset>
+
+          <button type="submit">Save settings</button>
+        </form>
+        <p id="settings-status" class="settings-status"></p>
+      </section>
+    </main>
+  </body>
+</html>

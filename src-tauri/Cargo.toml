@@ -1,0 +1,46 @@
+[package]
+name = "anonpic"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Desktop-only executable. The Rust source lives in the top-level `src/`
+# directory (outside this manifest dir), so the binary target is declared
+# explicitly here.
+[[bin]]
+name = "anonpic"
+path = "../src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Native Windows toast notifications (uses tauri-winrt-notification on Windows).
+notify-rust = "4"
+
+# Windows-only native API access via Microsoft's official bindings.
+# Each Win32 API area is gated behind its own feature; add features here as
+# you call into new parts of the Windows API.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_GdiPlus",
+    "Win32_Security_Cryptography",
+    "Win32_System_DataExchange",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
