@@ -20,6 +20,9 @@
       <button id="tab-settings" class="tab" type="button" role="tab" aria-selected="false" aria-controls="settings-tab">
         Settings
       </button>
+      <button id="tab-custom-data" class="tab" type="button" role="tab" aria-selected="false" aria-controls="custom-data-tab">
+        Custom Data
+      </button>
     </nav>
 
     <main class="content">
@@ -75,11 +78,67 @@
               <input id="auto-save" type="checkbox" />
               <span>Auto-save to Images folder</span>
             </label>
+
+            <label class="check">
+              <span class="help" tabindex="0" aria-label="Help: circular selection">
+                ⓘ
+                <span class="tooltip" role="tooltip">
+                  Draw the capture region as a circle instead of a rectangle while
+                  you drag-select an area.
+                </span>
+              </span>
+              <input id="circular-selection" type="checkbox" />
+              <span>Circular selection</span>
+            </label>
+
+            <label class="check">
+              <span class="help" tabindex="0" aria-label="Help: ignore self">
+                ?
+                <span class="tooltip" role="tooltip">
+                  Hide the Anonpic window from screenshots. Leave unchecked to
+                  allow captures to include Anonpic itself.
+                </span>
+              </span>
+              <input id="ignore-self" type="checkbox" />
+              <span>Ignore Self</span>
+            </label>
+
+            <label class="check">
+              <span class="help" tabindex="0" aria-label="Help: fill image data with custom data">
+                ?
+                <span class="tooltip" role="tooltip">
+                  Strip image data first, then write replacement EXIF and metadata
+                  values from the Custom Data tab.
+                </span>
+              </span>
+              <input id="fill-custom-data" type="checkbox" />
+              <span>Fill image data with custom data</span>
+            </label>
           </fieldset>
 
           <button type="submit">Save settings</button>
         </form>
         <p id="settings-status" class="settings-status"></p>
+      </section>
+
+      <section id="custom-data-tab" class="tab-panel" role="tabpanel" aria-labelledby="tab-custom-data" hidden>
+        <form id="custom-data-form" class="settings custom-data">
+          <div class="custom-data-list">
+            <label class="field custom-data-row">
+              <span>EXIF</span>
+              <input id="custom-exif" type="text" placeholder="Replacement EXIF value" />
+            </label>
+
+            <label class="field custom-data-row">
+              <span>Metadata</span>
+              <input id="custom-metadata" type="text" placeholder="Replacement metadata value" />
+            </label>
+          </div>
+
+          <button id="generate-custom-data" type="button">Auto generate</button>
+          <button type="submit">Save custom data</button>
+        </form>
+        <p id="custom-data-status" class="settings-status"></p>
       </section>
     </main>
   </body>

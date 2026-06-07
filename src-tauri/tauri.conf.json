@@ -11,12 +11,12 @@
     "windows": [
       {
         "title": "Anonpic",
-        "width": 420,
-        "height": 320,
+        "width": 421,
+        "height": 523,
         "minWidth": 360,
         "minHeight": 260,
         "center": true,
-        "contentProtected": true
+        "contentProtected": false
       }
     ],
     "security": {

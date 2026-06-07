@@ -4,8 +4,9 @@
 
 - Prefer performance and memory safety.
 - Use Allman-style brackets (opening brace on its own line) for methods, structs, enums, `if`, and `for` loops.
-- Keep comments light. Follow standard Rust commenting: a brief description of intent, plus explicit safety-concern notations (e.g. `// SAFETY:` on `unsafe` blocks). For commenting, don't overdo it inside methods; comments for global variables and types are fine, but for methods the only comment should be to describe the method.
-- When making methods, private-style methods should always be placed under public methods.
+- Keep comments light. Follow standard Rust commenting: a brief description of intent along with its parameter info + return type info, plus explicit safety-concern notations (e.g. `// SAFETY:` on `unsafe` blocks). For commenting, comments should only be for global vars, structs, methods, impl, etc... there should be no comment inside of a method.
+- when making methods, private style methods should always be placed under public methods.
+- There should be 2 indents / free lines between each method, this also includes the method comment, this way to make it more spacey.
 
 ## Platform
 

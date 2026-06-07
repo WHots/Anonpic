@@ -129,6 +129,21 @@ pub fn is_jpeg(path: &str) -> bool
 }
 
 
+/// used this as a ref: https://www.libpng.org/pub/png/spec/1.2/PNG-Structure.html
+pub fn is_png(path: &str) -> bool
+{
+    use std::io::Read;
+    
+    let mut header: [u8; 8] = [0; 8];
+
+    match std::fs::File::open(path)
+    {
+        Ok(mut file) => file.read_exact(&mut header).is_ok() && header == [137, 80, 78, 71, 13, 10, 26, 10],
+        Err(_) => false,
+    }
+}
+
+
 /// Returns `true` only if `path` exists and is a real directory. Directory
 /// symlinks and junctions are rejected so writes cannot be redirected through a
 /// planted reparse point.

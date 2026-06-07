@@ -162,6 +162,17 @@ body {
   min-height: 1em;
 }
 
+.custom-data-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.custom-data-row span {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* Tabs */
 .tabs {
   display: flex;

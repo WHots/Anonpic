@@ -3,7 +3,7 @@
 
 
 
-use std::ffi::OsStr;
+use std::ffi::{c_void, OsStr};
 use std::os::windows::ffi::OsStrExt;
 use std::ptr;
 
@@ -11,8 +11,8 @@ use windows_sys::core::GUID;
 use windows_sys::Win32::Graphics::GdiPlus::{
     GdipDisposeImage, GdipGetImageEncoders, GdipGetImageEncodersSize, GdipGetImageRawFormat,
     GdipGetPropertyCount, GdipGetPropertyIdList, GdipGetPropertyItem, GdipGetPropertyItemSize,
-    GdipLoadImageFromFile, GdipRemovePropertyItem, GdipSaveImageToFile, GdiplusShutdown,
-    GdiplusStartup, GdiplusStartupInput, GpImage, ImageCodecInfo, PropertyItem,
+    GdipLoadImageFromFile, GdipRemovePropertyItem, GdipSaveImageToFile, GdipSetPropertyItem,
+    GdiplusShutdown, GdiplusStartup, GdiplusStartupInput, GpImage, ImageCodecInfo, PropertyItem,
 };
 
 use crate::core::helpers::file_operations::file_helper;
@@ -105,10 +105,49 @@ pub fn strip_exif(path: &str) -> StripExifResult
     {
         strip_jpeg_exif(path)
     }
+    else if file_helper::is_png(path)
+    {
+        strip_via_gdiplus(path)
+    }
     else
     {
         strip_via_gdiplus(path)
     }
+}
+
+
+/// Writes the configured replacement value to text-based EXIF tags.
+pub fn write_custom_exif(path: &str, value: &str) -> bool
+{
+    let value = value.trim();
+    if value.is_empty()
+    {
+        return false;
+    }
+
+    let _gdiplus = match GdiPlusToken::startup()
+    {
+        Some(token) => token,
+        None => return false,
+    };
+    let image = match LoadedImage::load(path)
+    {
+        Some(image) => image,
+        None => return false,
+    };
+
+    let mut applied = false;
+    applied |= set_ascii_property(image.handle, TAG_MAKE, value);
+    applied |= set_ascii_property(image.handle, TAG_MODEL, value);
+    applied |= set_ascii_property(image.handle, TAG_SOFTWARE, value);
+    applied |= set_ascii_property(image.handle, TAG_DATE_TIME_ORIGINAL, value);
+
+    if !applied
+    {
+        return false;
+    }
+
+    save_image_over(path, image)
 }
 
 
@@ -482,6 +521,59 @@ fn strip_via_gdiplus(path: &str) -> StripExifResult
         StripExifResult::Failed
     }
 }
+
+/// Writes one ASCII property item, filtering bytes that are not valid ASCII.
+fn set_ascii_property(image: *mut GpImage, propid: u32, value: &str) -> bool
+{
+    let mut bytes: Vec<u8> = value
+        .bytes()
+        .filter(|byte| byte.is_ascii() && !byte.is_ascii_control())
+        .collect();
+
+    if bytes.is_empty()
+    {
+        return false;
+    }
+
+    bytes.push(0);
+
+    let item = PropertyItem
+    {
+        id: propid,
+        length: bytes.len() as u32,
+        r#type: TYPE_ASCII,
+        value: bytes.as_mut_ptr() as *mut c_void,
+    };
+
+    unsafe { GdipSetPropertyItem(image, &item) == 0 }
+}
+
+
+/// Re-encodes `image` over `path` via a temp file and atomic rename.
+fn save_image_over(path: &str, image: LoadedImage) -> bool
+{
+    let mut clsid = GUID { data1: 0, data2: 0, data3: 0, data4: [0; 8] };
+
+    if !find_encoder(image.handle, &mut clsid)
+    {
+        return false;
+    }
+
+    let temp = temp_path(path);
+    let wide: Vec<u16> = OsStr::new(&temp).encode_wide().chain(std::iter::once(0)).collect();
+
+    let status = unsafe { GdipSaveImageToFile(image.handle, wide.as_ptr(), &clsid, ptr::null()) };
+    if status != 0
+    {
+        let _ = std::fs::remove_file(&temp);
+        return false;
+    }
+
+    drop(image);
+
+    commit_rename(&temp, path)
+}
+
 
 /// Returns the list of GDI+ property-item identifiers present on the image.
 fn property_ids(image: *mut GpImage) -> Option<Vec<u32>>

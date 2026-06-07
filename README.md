@@ -14,6 +14,12 @@
   <img alt="Framework" src="https://img.shields.io/badge/framework-Tauri%20v2-24C8DB?logo=tauri&logoColor=white" />
 </p>
 
+## Screenshots
+
+| Settings | Custom Data | Capture |
+| --- | --- | --- |
+| ![Anonpic settings tab](ui/settings.png) | ![Anonpic custom data tab](ui/custom_data.png) | ![Anonpic capture tab](ui/capture.png) |
+
 > [!NOTE]
 > **Built with AI assistance.** This project was developed with the help of AI tools, primarily **Claude Code**, and **Codex** used for one or two prompts.
 > - **Backend (Rust):** AI-assisted, but every part was **reviewed and structured by a human**.
@@ -41,6 +47,10 @@ It is built with **Tauri v2** (Rust backend + WebView UI) and talks to the OS di
 - 🖼️ **Format choice** — save as **PNG**, **JPEG**, or **BMP**.
 - 🔔 **Native toasts** — a Windows notification confirms each save / clipboard copy.
 
+- **Circle crop mode** - toggle circular selection/cropping when you want a round capture instead of the normal rectangular region.
+- **Custom EXIF + metadata rewriting** - optionally fill stripped image data with your own saved replacement values, or auto-generate unique random values for each data type.
+- **Ignore Self toggle** - choose whether Anonpic hides itself from screenshots or allows its own window to be captured.
+
 ## How it works
 
 1. **Trigger** — the global <kbd>Print Screen</kbd> hook (or the in-app button) starts a capture.
@@ -49,9 +59,13 @@ It is built with **Tauri v2** (Rust backend + WebView UI) and talks to the OS di
 4. **Crop & clean** — the chosen region is cropped from the snapshot, encoded to your chosen format, and run through the EXIF + metadata strippers.
 5. **Dispatch** — depending on your settings, the cleaned image is saved to disk, copied to the clipboard, or both, and a toast confirms it.
 
+> Current behavior: **Ignore Self** controls whether the Anonpic window is hidden from screenshots, **Circle crop mode** supports round captures, and custom data filling strips first before writing saved replacement EXIF and metadata values.
+
 ## Privacy: what gets removed
 
 Captured images are encoded with GDI+ and then passed through two strippers. For **JPEG** files the EXIF segments are scrubbed directly (lossless); for other formats the image is re-encoded with all property items removed.
+
+When **Fill image data with custom data** is enabled, Anonpic strips first, then writes the saved Custom Data values back into supported text-style EXIF and metadata fields. The **Auto generate** action fills each custom data entry with a unique random string.
 
 ### EXIF (camera & location) — `xif_data`
 
@@ -104,6 +118,10 @@ The **Settings** tab persists to `config/app.cfg` and controls:
 | **Image format** | `PNG`, `JPEG`, or `BMP`. |
 | **Copy to clipboard** | After a capture, copy the cleaned image to the clipboard. |
 | **Auto-save to Images folder** | Keep the cleaned image on disk. With this off (and clipboard on), the file is used only as a staging step and removed after copying. |
+| **Circular selection** | Use the circle crop/selection mode instead of the normal rectangle. |
+| **Ignore Self** | Hide the Anonpic window from screenshots when enabled. Leave off to allow Anonpic to appear in captures. |
+| **Fill image data with custom data** | After stripping EXIF and metadata, write your saved Custom Data values into the saved image. |
+| **Custom Data tab** | Save replacement values for EXIF and metadata, or auto-generate a unique random value for each entry. |
 
 > Both options are independent checkboxes, so you can do either, both, or — if you only want the clipboard — copy without leaving a file behind.
 
@@ -173,7 +191,6 @@ cargo check --manifest-path src-tauri/Cargo.toml
 ## Roadmap / TODO
 
 - [ ] **Strip metadata from existing images** — let the user point Anonpic at images they already have (not just new captures) and scrub them in place.
-- [ ] **Metadata spoofing** — instead of only stripping, optionally **write custom values** (fake camera, timestamp, GPS, author, etc.) so the user can deliberately spoof an image's data.
 
 ## Recommended IDE setup
 

@@ -143,18 +143,15 @@ pub fn save_screenshot(screenshot: &Screenshot) -> Option<PathBuf>
         return None;
     }
 
-    // Guarantee the saved file carries no embedded metadata: strip camera/GPS
-    // EXIF first (lossless for JPEG), then any common authoring metadata.
     let _ = xif_data::strip_exif(&path_text);
     let _ = metadata::strip_metadata(&path_text);
+    apply_custom_data(&path_text, config.as_ref());
 
     if copy_to_clipboard
     {
         copy_image_to_clipboard(&path_text);
     }
 
-    // Clipboard-only: the cleaned file was just a staging area, so remove it and
-    // report no saved path.
     if !auto_save
     {
         let _ = std::fs::remove_file(&path);
@@ -165,8 +162,6 @@ pub fn save_screenshot(screenshot: &Screenshot) -> Option<PathBuf>
         return None;
     }
 
-    // A single toast: the clipboard message subsumes the save when both are on,
-    // and carries the saved path since the file was kept this time.
     if copy_to_clipboard
     {
         notifications_handler::notify_screenshot_clipboardsaved(Some(&path));
@@ -177,6 +172,58 @@ pub fn save_screenshot(screenshot: &Screenshot) -> Option<PathBuf>
     }
 
     Some(path)
+}
+
+
+/// Writes configured custom image data when the user has enabled replacements.
+fn apply_custom_data(path: &str, config: Option<&Config>)
+{
+    let Some(config) = config
+    else
+    {
+        return;
+    };
+
+    if !config.fill_custom_data
+    {
+        return;
+    }
+
+    let exif_value = config.custom_data.exif.trim();
+    if !exif_value.is_empty()
+    {
+        let _ = xif_data::write_custom_exif(path, exif_value);
+    }
+
+    let metadata_value = config.custom_data.metadata.trim();
+    if !metadata_value.is_empty()
+    {
+        let metadata = metadata_from_value(metadata_value);
+        let _ = metadata::write_metadata(path, &metadata);
+    }
+}
+
+
+/// Builds a metadata payload whose common tags all carry `value`.
+fn metadata_from_value(value: &str) -> metadata::Metadata
+{
+    let value = value.to_string();
+
+    metadata::Metadata
+    {
+        document_name: Some(value.clone()),
+        description: Some(value.clone()),
+        software: Some(value.clone()),
+        date_time: Some(value.clone()),
+        artist: Some(value.clone()),
+        host_computer: Some(value.clone()),
+        copyright: Some(value.clone()),
+        title: Some(value.clone()),
+        comment: Some(value.clone()),
+        author: Some(value.clone()),
+        keywords: Some(value.clone()),
+        subject: Some(value),
+    }
 }
 
 
@@ -229,7 +276,6 @@ fn encode_image(bitmap: HBITMAP, path: &str, encoder: &GUID) -> bool
 
     let mut gp_bitmap: *mut GpBitmap = ptr::null_mut();
 
-    // SAFETY: `bitmap` is a valid HBITMAP and no palette is supplied.
     if unsafe { GdipCreateBitmapFromHBITMAP(bitmap, ptr::null_mut(), &mut gp_bitmap) } != 0
         || gp_bitmap.is_null()
     {
@@ -238,23 +284,16 @@ fn encode_image(bitmap: HBITMAP, path: &str, encoder: &GUID) -> bool
 
     let wide: Vec<u16> = OsStr::new(path).encode_wide().chain(std::iter::once(0)).collect();
 
-    // A GDI+ bitmap is an image, so its handle doubles as a GpImage for saving.
-    // SAFETY: `gp_bitmap` is valid, `wide` is NUL-terminated, `encoder` is a
-    // built-in encoder CLSID, and null requests default encoder parameters.
     let status = unsafe {
         GdipSaveImageToFile(gp_bitmap as *mut GpImage, wide.as_ptr(), encoder, ptr::null())
     };
 
-    // SAFETY: `gp_bitmap` came from GdipCreateBitmapFromHBITMAP and is disposed once.
     unsafe { GdipDisposeImage(gp_bitmap as *mut GpImage) };
 
     status == 0
 }
 
 
-/// Loads the cleaned image at `path` and places it on the Windows clipboard as a
-/// device-independent bitmap, so the copy survives the app closing and pastes
-/// into any app. Returns `true` on success.
 fn copy_image_to_clipboard(path: &str) -> bool
 {
     let _gdiplus = match GdiPlusToken::startup()
@@ -267,7 +306,6 @@ fn copy_image_to_clipboard(path: &str) -> bool
 
     let mut gp_bitmap: *mut GpBitmap = ptr::null_mut();
 
-    // SAFETY: `wide` is NUL-terminated and `gp_bitmap` receives the loaded bitmap.
     if unsafe { GdipCreateBitmapFromFile(wide.as_ptr(), &mut gp_bitmap) } != 0
         || gp_bitmap.is_null()
     {
@@ -276,10 +314,8 @@ fn copy_image_to_clipboard(path: &str) -> bool
 
     let mut hbitmap: HBITMAP = ptr::null_mut();
 
-    // SAFETY: `gp_bitmap` is valid; an opaque-black background flattens any alpha.
     let status = unsafe { GdipCreateHBITMAPFromBitmap(gp_bitmap, &mut hbitmap, 0xFF00_0000) };
 
-    // SAFETY: `gp_bitmap` came from GdipCreateBitmapFromFile and is disposed once.
     unsafe { GdipDisposeImage(gp_bitmap as *mut GpImage) };
 
     if status != 0 || hbitmap.is_null()
@@ -289,7 +325,6 @@ fn copy_image_to_clipboard(path: &str) -> bool
 
     let copied = dib_to_clipboard(hbitmap);
 
-    // SAFETY: `hbitmap` is freed once; the clipboard holds an independent DIB copy.
     unsafe { DeleteObject(hbitmap) };
 
     copied
@@ -303,7 +338,6 @@ fn dib_to_clipboard(hbitmap: HBITMAP) -> bool
 {
     let mut bitmap: BITMAP = unsafe { std::mem::zeroed() };
 
-    // SAFETY: `hbitmap` is valid and `bitmap` is sized for a BITMAP.
     if unsafe {
         GetObjectW(
             hbitmap as *mut c_void,
@@ -322,7 +356,6 @@ fn dib_to_clipboard(hbitmap: HBITMAP) -> bool
         return false;
     }
 
-    // Bottom-up 24-bpp rows are padded to a 4-byte boundary.
     let stride = (((width * 24) + 31) / 32) * 4;
     let image_size = (stride * height) as usize;
     let header_size = std::mem::size_of::<BITMAPINFOHEADER>();
@@ -348,7 +381,6 @@ fn dib_to_clipboard(hbitmap: HBITMAP) -> bool
         return false;
     }
 
-    // SAFETY: a MOVEABLE block sized for the header plus the pixel rows.
     let hmem = unsafe { GlobalAlloc(GMEM_MOVEABLE, header_size + image_size) };
     if hmem.is_null()
     {
@@ -356,7 +388,6 @@ fn dib_to_clipboard(hbitmap: HBITMAP) -> bool
         return false;
     }
 
-    // SAFETY: `hmem` was just allocated MOVEABLE; lock it for a writable pointer.
     let dest = unsafe { GlobalLock(hmem) } as *mut u8;
     if dest.is_null()
     {
@@ -365,9 +396,6 @@ fn dib_to_clipboard(hbitmap: HBITMAP) -> bool
         return false;
     }
 
-    // SAFETY: `dest` addresses `header_size + image_size` writable bytes; the
-    // header is copied to the front and GetDIBits fills the pixel rows after it,
-    // reading the dimensions from the header `dest` now points at.
     let extracted = unsafe {
         ptr::copy_nonoverlapping(&header as *const BITMAPINFOHEADER as *const u8, dest, header_size);
         GetDIBits(
@@ -399,9 +427,8 @@ fn dib_to_clipboard(hbitmap: HBITMAP) -> bool
 /// `true` on success.
 fn set_clipboard_dib(hmem: *mut c_void) -> bool
 {
-    // SAFETY: the clipboard is always closed after opening, and `hmem` is a valid
-    // global block transferred to the system only when SetClipboardData succeeds.
     unsafe {
+        
         if OpenClipboard(ptr::null_mut()) == 0
         {
             GlobalFree(hmem);
@@ -423,7 +450,6 @@ fn set_clipboard_dib(hmem: *mut c_void) -> bool
 }
 
 
-/// RAII guard that initializes GDI+ on construction and shuts it down on drop.
 struct GdiPlusToken
 {
     token: usize,
@@ -440,9 +466,9 @@ impl GdiPlusToken
             SuppressBackgroundThread: 0,
             SuppressExternalCodecs: 0,
         };
+
         let mut token: usize = 0;
 
-        // SAFETY: `token` and `input` are valid; no startup output is requested.
         if unsafe { GdiplusStartup(&mut token, &input, ptr::null_mut()) } != 0
         {
             return None;
@@ -456,7 +482,6 @@ impl Drop for GdiPlusToken
 {
     fn drop(&mut self)
     {
-        // SAFETY: `token` came from a successful GdiplusStartup and is shut down once.
         unsafe { GdiplusShutdown(self.token) };
     }
 }

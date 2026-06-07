@@ -72,6 +72,7 @@ impl Screenshot
         Some(Screenshot { bitmap, width, height })
     }
 
+
     /// Captures a rectangular region of the screen at virtual-desktop
     /// coordinates `(x, y)` with the given size into a GDI bitmap. Returns
     /// `None` for a non-positive size or if the capture fails.
@@ -105,6 +106,7 @@ impl Screenshot
 
         let previous = unsafe { SelectObject(memory_dc, bitmap) };
         let copied = unsafe { BitBlt(memory_dc, 0, 0, width, height, screen_dc, x, y, SRCCOPY) };
+        
         unsafe { SelectObject(memory_dc, previous) };
         unsafe { DeleteDC(memory_dc) };
         unsafe { ReleaseDC(ptr::null_mut(), screen_dc) };
