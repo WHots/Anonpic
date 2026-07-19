@@ -7,6 +7,8 @@ use crate::core::base::configs::config_master::{
 };
 use crate::core::base::notify::notifications_handler;
 use crate::core::base::screen_grab::free_roam_screen_grab::start_free_roam_capture;
+use crate::core::base::start_menu::start_menu_handler;
+use crate::core::base::tray::tray_handler;
 
 fn main()
 {
@@ -21,7 +23,17 @@ fn main()
         {
             notifications_handler::init(app.handle().clone());
             apply_saved_ignore_self(app.handle());
+            start_menu_handler::apply_saved();
+            tray_handler::init(app.handle())?;
             Ok(())
+        })
+        .on_window_event(|window, event|
+        {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+            {
+                let _ = window.hide();
+                api.prevent_close();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             save_config,

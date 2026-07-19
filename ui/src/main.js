@@ -12,6 +12,7 @@ async function loadSettings() {
   document.querySelector("#circular-selection").checked = false;
   document.querySelector("#ignore-self").checked = false;
   document.querySelector("#fill-custom-data").checked = false;
+  document.querySelector("#start-menu-shortcut").checked = true;
   setCustomData({ exif: "", metadata: "" });
 
   try {
@@ -24,6 +25,7 @@ async function loadSettings() {
       document.querySelector("#circular-selection").checked = config.circular_selection ?? false;
       document.querySelector("#ignore-self").checked = config.ignore_self ?? false;
       document.querySelector("#fill-custom-data").checked = config.fill_custom_data ?? false;
+      document.querySelector("#start-menu-shortcut").checked = config.start_menu_shortcut ?? true;
       setCustomData(config.custom_data);
     }
   } catch (err) {
@@ -40,6 +42,7 @@ async function saveSettings(statusSelector = "#settings-status", successText = "
     circular_selection: document.querySelector("#circular-selection").checked,
     ignore_self: document.querySelector("#ignore-self").checked,
     fill_custom_data: document.querySelector("#fill-custom-data").checked,
+    start_menu_shortcut: document.querySelector("#start-menu-shortcut").checked,
     custom_data: getCustomData(),
   };
 

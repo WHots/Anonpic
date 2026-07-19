@@ -17,9 +17,10 @@ const TARGET_VK: u32 = VK_SNAPSHOT as u32;
 /// queue until `WM_QUIT`. Blocks the calling thread, so run it on its own.
 pub fn listen()
 {
-    
     let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
 
+    // SAFETY: the hook procedure is a valid `extern "system"` fn and the hook
+    // is removed before returning.
     let hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), hinstance, 0) };
     if hook.is_null()
     {
@@ -27,8 +28,8 @@ pub fn listen()
         return;
     }
 
+    // SAFETY: `msg` is a local out-parameter; MSG is valid when zeroed.
     let mut msg: MSG = unsafe { std::mem::zeroed() };
-    
     while unsafe { GetMessageW(&mut msg, ptr::null_mut(), 0, 0) } > 0
     {
     }
@@ -37,6 +38,11 @@ pub fn listen()
 }
 
 
+/// Low-level keyboard hook procedure: spawns a screen capture when the target
+/// key is pressed, then passes every event down the hook chain.
+///
+/// SAFETY: called by the system with `lparam` pointing at a `KBDLLHOOKSTRUCT`
+/// whenever `code` is `HC_ACTION`.
 unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT
 {
     let is_key_down = wparam as u32 == WM_KEYDOWN || wparam as u32 == WM_SYSKEYDOWN;
@@ -45,14 +51,9 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
         let kb = &*(lparam as *const KBDLLHOOKSTRUCT);
         if kb.vkCode == TARGET_VK
         {
-            on_print_screen();
+            crate::core::base::screen_grab::free_roam_screen_grab::spawn_capture();
         }
     }
 
     CallNextHookEx(ptr::null_mut(), code, wparam, lparam)
-}
-
-fn on_print_screen()
-{
-    crate::core::base::screen_grab::free_roam_screen_grab::spawn_capture();
 }

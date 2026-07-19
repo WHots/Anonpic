@@ -4,11 +4,8 @@ use std::ptr;
 
 use windows_sys::Win32::Graphics::Gdi::{
     BitBlt, BLACKNESS, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC,
-    GetWindowDC, HBITMAP, PatBlt, ReleaseDC, SelectObject, SRCCOPY,
+    HBITMAP, PatBlt, ReleaseDC, SelectObject, SRCCOPY,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-
-use crate::core::helpers::windows_actual_windows_help::windows_helper::get_dimensions_from_handle;
 
 /// A screenshot held in a GDI bitmap. Owns the bitmap and frees it on drop.
 pub struct Screenshot
@@ -20,59 +17,6 @@ pub struct Screenshot
 
 impl Screenshot
 {
-    /// Captures the current foreground window into a GDI bitmap via BitBlt,
-    /// sizing the capture from `get_dimensions_from_handle`. Returns `None` when
-    /// there is no foreground window or the capture fails.
-    pub fn capture_foreground_window() -> Option<Screenshot>
-    {
-        let hwnd = unsafe { GetForegroundWindow() };
-        
-        if hwnd.is_null()
-        {
-            return None;
-        }
-
-        let (width, height) = get_dimensions_from_handle(hwnd)?;
-
-        let window_dc = unsafe { GetWindowDC(hwnd) };
-
-        if window_dc.is_null()
-        {
-            return None;
-        }
-
-        let memory_dc = unsafe { CreateCompatibleDC(window_dc) };
-        
-        if memory_dc.is_null()
-        {
-            unsafe { ReleaseDC(hwnd, window_dc) };
-            return None;
-        }
-
-        let bitmap = unsafe { CreateCompatibleBitmap(window_dc, width, height) };
-        if bitmap.is_null()
-        {
-            unsafe { DeleteDC(memory_dc) };
-            unsafe { ReleaseDC(hwnd, window_dc) };
-            return None;
-        }
-
-        let previous = unsafe { SelectObject(memory_dc, bitmap) };
-        let copied = unsafe { BitBlt(memory_dc, 0, 0, width, height, window_dc, 0, 0, SRCCOPY) };
-        unsafe { SelectObject(memory_dc, previous) };
-        unsafe { DeleteDC(memory_dc) };
-        unsafe { ReleaseDC(hwnd, window_dc) };
-
-        if copied == 0
-        {
-            unsafe { DeleteObject(bitmap) };
-            return None;
-        }
-
-        Some(Screenshot { bitmap, width, height })
-    }
-
-
     /// Captures a rectangular region of the screen at virtual-desktop
     /// coordinates `(x, y)` with the given size into a GDI bitmap. Returns
     /// `None` for a non-positive size or if the capture fails.
@@ -83,6 +27,8 @@ impl Screenshot
             return None;
         }
 
+        // SAFETY: every DC and GDI object acquired below is released on each
+        // path; the bitmap's ownership moves into the returned Screenshot.
         let screen_dc = unsafe { GetDC(ptr::null_mut()) };
         if screen_dc.is_null()
         {
@@ -106,7 +52,6 @@ impl Screenshot
 
         let previous = unsafe { SelectObject(memory_dc, bitmap) };
         let copied = unsafe { BitBlt(memory_dc, 0, 0, width, height, screen_dc, x, y, SRCCOPY) };
-        
         unsafe { SelectObject(memory_dc, previous) };
         unsafe { DeleteDC(memory_dc) };
         unsafe { ReleaseDC(ptr::null_mut(), screen_dc) };
@@ -120,17 +65,19 @@ impl Screenshot
         Some(Screenshot { bitmap, width, height })
     }
 
+
     /// Copies a sub-rectangle of this screenshot into a new screenshot. `(x, y)`
     /// is relative to this bitmap's top-left. Returns `None` if the rectangle
     /// lies outside the bitmap or the copy fails.
     pub fn crop(&self, x: i32, y: i32, width: i32, height: i32) -> Option<Screenshot>
     {
-        if width <= 0 || height <= 0 || x < 0 || y < 0
-            || x + width > self.width || y + height > self.height
+        if width <= 0 || height <= 0 || x < 0 || y < 0 || x + width > self.width || y + height > self.height
         {
             return None;
         }
 
+        // SAFETY: every DC and GDI object acquired below is released on each
+        // path; the bitmap's ownership moves into the returned Screenshot.
         let screen_dc = unsafe { GetDC(ptr::null_mut()) };
         if screen_dc.is_null()
         {
@@ -176,11 +123,13 @@ impl Screenshot
         Some(Screenshot { bitmap, width, height })
     }
 
+
     /// The captured bitmap's dimensions in pixels as `(width, height)`.
     pub fn dimensions(&self) -> (i32, i32)
     {
         (self.width, self.height)
     }
+
 
     /// The underlying GDI bitmap handle.
     pub fn bitmap(&self) -> HBITMAP
@@ -191,8 +140,12 @@ impl Screenshot
 
 impl Drop for Screenshot
 {
+    /// Zeroes the pixel data before freeing the bitmap so the capture does not
+    /// linger in freed GDI memory.
     fn drop(&mut self)
     {
+        // SAFETY: this screenshot owns `bitmap`; the scratch DC is created and
+        // deleted here, and the bitmap is freed exactly once.
         let dc = unsafe { CreateCompatibleDC(ptr::null_mut()) };
         if !dc.is_null()
         {

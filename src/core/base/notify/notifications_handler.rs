@@ -3,9 +3,6 @@
 //! be resolved and so notifications can be raised from the capture threads, which
 //! have no handle of their own.
 
-use std::ffi::OsStr;
-use std::iter::once;
-use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -15,6 +12,8 @@ use windows_sys::Win32::System::Registry::{
     RegCloseKey, RegCreateKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_WRITE,
     REG_OPTION_NON_VOLATILE, REG_SZ,
 };
+
+use crate::core::helpers::graphics::gdiplus_helper::wide;
 
 /// AppUserModelID that tags every toast. Matches the Tauri bundle identifier so
 /// installed builds share the identity registered by the installer. Without it,
@@ -35,15 +34,13 @@ pub fn init(app: AppHandle)
     register_app_id();
 }
 
+
 /// Raises a toast notification, badged with the app logo, telling the user a
 /// screenshot was saved at `path`.
 pub fn notify_screenshot_saved(path: &Path)
 {
     let mut notification = notify_rust::Notification::new();
-    notification
-        .app_id(APP_ID)
-        .summary("Screenshot saved")
-        .body(&path.to_string_lossy());
+    notification.app_id(APP_ID).summary("Screenshot saved").body(&path.to_string_lossy());
 
     if let Some(logo) = logo_path()
     {
@@ -89,18 +86,9 @@ fn register_app_id()
     unsafe
     {
         let mut key: HKEY = std::ptr::null_mut();
-        if RegCreateKeyExW(
-            HKEY_CURRENT_USER,
-            subkey.as_ptr(),
-            0,
-            std::ptr::null(),
-            REG_OPTION_NON_VOLATILE,
-            KEY_WRITE,
-            std::ptr::null(),
-            &mut key,
-            std::ptr::null_mut(),
-        ) != 0
+        if RegCreateKeyExW(HKEY_CURRENT_USER, subkey.as_ptr(), 0, std::ptr::null(), REG_OPTION_NON_VOLATILE, KEY_WRITE, std::ptr::null(), &mut key, std::ptr::null_mut()) != 0
         {
+            eprintln!("notify: failed to register toast identity key");
             return;
         }
 
@@ -114,26 +102,18 @@ fn register_app_id()
     }
 }
 
-/// Writes a single `REG_SZ` value into an already-opened registry key.
+
+/// Writes a single `REG_SZ` value named `name` into the already-opened registry
+/// key `key`.
+///
+/// SAFETY: `key` must be an open registry key handle with write access.
 unsafe fn set_string(key: HKEY, name: &str, value: &str)
 {
     let name = wide(name);
     let data = wide(value);
-    RegSetValueExW(
-        key,
-        name.as_ptr(),
-        0,
-        REG_SZ,
-        data.as_ptr() as *const u8,
-        (data.len() * std::mem::size_of::<u16>()) as u32,
-    );
+    RegSetValueExW(key, name.as_ptr(), 0, REG_SZ, data.as_ptr() as *const u8, (data.len() * std::mem::size_of::<u16>()) as u32);
 }
 
-/// Encodes a string as a NUL-terminated UTF-16 buffer for the Win32 `*W` APIs.
-fn wide(value: &str) -> Vec<u16>
-{
-    OsStr::new(value).encode_wide().chain(once(0)).collect()
-}
 
 /// Resolves the app logo: the bundled `logo.png` resource for installed builds,
 /// falling back to `ui/logo.png` in the source tree during development. Returns
@@ -159,6 +139,7 @@ fn logo_path() -> Option<String>
 
     None
 }
+
 
 /// Resolves the multi-resolution `icon.ico` used as the toast's app icon: the
 /// bundled resource for installed builds, falling back to `src-tauri/icons` in

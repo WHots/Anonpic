@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
+use crate::core::base::start_menu::start_menu_handler;
 use crate::core::helpers::file_operations::file_helper;
 
 const CONFIG_DIR: &str = "config";
@@ -35,6 +36,10 @@ pub struct Config
     /// Replace stripped image data with user-configured values after cleaning.
     #[serde(default)]
     pub fill_custom_data: bool,
+    /// Keep a shortcut in the Start Menu so Anonpic shows up in Windows
+    /// search. Enabled by default.
+    #[serde(default = "default_true")]
+    pub start_menu_shortcut: bool,
     /// User-configured replacement values for image data families.
     #[serde(default)]
     pub custom_data: CustomDataConfig,
@@ -48,12 +53,6 @@ pub struct CustomDataConfig
     pub metadata: String,
 }
 
-/// Serde default for `auto_save`, preserving the app's original always-save
-/// behavior for older config files that lack the field.
-fn default_true() -> bool
-{
-    true
-}
 
 /// Saves the UI's settings as JSON to `<working_dir>/config/app.cfg`, creating
 /// the config directory if needed. Returns `true` on success.
@@ -64,10 +63,12 @@ pub fn save_config(app: tauri::AppHandle, config: Config) -> bool
     if saved
     {
         apply_ignore_self(&app, config.ignore_self);
+        start_menu_handler::apply(config.start_menu_shortcut);
     }
 
     saved
 }
+
 
 /// Loads the persisted settings from `<working_dir>/config/app.cfg`, or `None`
 /// when the file is absent or cannot be parsed.
@@ -78,6 +79,7 @@ pub fn load_config() -> Option<Config>
     let json = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&json).ok()
 }
+
 
 /// Generates unique replacement values for every custom data entry.
 #[tauri::command]
@@ -92,6 +94,7 @@ pub fn generate_custom_data() -> CustomDataConfig
     }
 }
 
+
 /// Applies the saved self-capture setting to the main window.
 pub fn apply_saved_ignore_self(app: &tauri::AppHandle)
 {
@@ -99,7 +102,27 @@ pub fn apply_saved_ignore_self(app: &tauri::AppHandle)
     apply_ignore_self(app, ignore_self);
 }
 
+
+/// Returns `<working_dir>/config`, or `None` if the working directory cannot be
+/// determined.
+pub fn config_dir() -> Option<PathBuf>
+{
+    let mut dir = std::env::current_dir().ok()?;
+    dir.push(CONFIG_DIR);
+    Some(dir)
+}
+
+
+/// Serde default for `auto_save`, preserving the app's original always-save
+/// behavior for older config files that lack the field.
+fn default_true() -> bool
+{
+    true
+}
+
+
 /// Writes `config` to the config file, ensuring its directory exists first.
+/// Returns `true` on success.
 fn persist_config(config: &Config) -> bool
 {
     let dir = match config_dir()
@@ -111,18 +134,30 @@ fn persist_config(config: &Config) -> bool
     let dir = dir.to_string_lossy().into_owned();
     if !file_helper::create_directory(&dir)
     {
+        eprintln!("config: failed to create config directory: {dir}");
         return false;
     }
 
     let json = match serde_json::to_string_pretty(config)
     {
         Ok(json) => json,
-        Err(_) => return false,
+        Err(_) =>
+        {
+            eprintln!("config: failed to serialize settings");
+            return false;
+        }
     };
 
     let path = Path::new(&dir).join(CONFIG_FILE);
-    std::fs::write(path, json).is_ok()
+    let written = std::fs::write(&path, json).is_ok();
+    if !written
+    {
+        eprintln!("config: failed to write {}", path.display());
+    }
+
+    written
 }
+
 
 /// Toggles content protection for the main window.
 fn apply_ignore_self(app: &tauri::AppHandle, ignore_self: bool)
@@ -132,6 +167,7 @@ fn apply_ignore_self(app: &tauri::AppHandle, ignore_self: bool)
         let _ = window.set_content_protected(ignore_self);
     }
 }
+
 
 /// Builds `count` unique random strings with the app's random string helper.
 fn unique_random_strings(count: usize) -> Vec<String>
@@ -149,13 +185,4 @@ fn unique_random_strings(count: usize) -> Vec<String>
     }
 
     values
-}
-
-/// Returns `<working_dir>/config`, or `None` if the working directory cannot be
-/// determined.
-fn config_dir() -> Option<PathBuf>
-{
-    let mut dir = std::env::current_dir().ok()?;
-    dir.push(CONFIG_DIR);
-    Some(dir)
 }
