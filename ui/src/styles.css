@@ -1,8 +1,15 @@
 :root {
   --white: #ffffff;
-  --baby-blue: #89cff0;
-  --baby-blue-dark: #5aa9d6;
-  --text: #14506e;
+  --red: #e0112d;
+  --red-dark: #bc0c26;
+  --red-soft: #fff0f2;
+  --charcoal: #202124;
+  --text: #2f3033;
+  --muted: #6d7075;
+  --surface-muted: #f4f4f5;
+  --border: #d8d9dc;
+  --border-strong: #b9bbc0;
+  --focus-ring: rgba(224, 17, 45, 0.2);
 }
 
 * {
@@ -18,25 +25,48 @@ body {
 
 body {
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  font-weight: 700; /* bold text throughout */
+  font-weight: 650;
   color: var(--text);
-  background: var(--white);
+  background: var(--surface-muted);
   display: flex;
   flex-direction: column;
   user-select: none;
 }
 
 .titlebar {
-  background: var(--baby-blue);
+  position: relative;
+  overflow: hidden;
+  background: var(--charcoal);
   color: var(--white);
-  padding: 12px 16px;
+  padding: 13px 16px 14px;
   text-align: center;
+  border-bottom: 3px solid var(--red);
+}
+
+.titlebar::before,
+.titlebar::after {
+  position: absolute;
+  top: 50%;
+  width: 42px;
+  height: 2px;
+  content: "";
+  background: linear-gradient(90deg, transparent, var(--red));
+  transform: translateY(-50%);
+}
+
+.titlebar::before {
+  left: calc(50% - 93px);
+}
+
+.titlebar::after {
+  right: calc(50% - 93px);
+  transform: translateY(-50%) rotate(180deg);
 }
 
 .titlebar h1 {
-  font-size: 1.4rem;
+  font-size: 1.38rem;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.045em;
 }
 
 .content {
@@ -45,7 +75,7 @@ body {
   flex-direction: column;
   gap: 14px;
   padding: 16px;
-  background: var(--white);
+  background: var(--surface-muted);
   overflow-y: auto;
 }
 
@@ -58,8 +88,9 @@ body {
 .key {
   display: inline-block;
   background: var(--white);
-  color: var(--baby-blue-dark);
-  border: 2px solid var(--baby-blue);
+  color: var(--charcoal);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 3px;
   border-radius: 6px;
   padding: 2px 8px;
   font-weight: 800;
@@ -69,15 +100,31 @@ body {
   font: inherit;
   font-weight: 800;
   color: var(--white);
-  background: var(--baby-blue);
-  border: none;
-  border-radius: 6px;
+  background: var(--red);
+  border: 1px solid var(--red);
+  border-radius: 7px;
   padding: 10px;
+  box-shadow: 0 3px 8px rgba(200, 14, 37, 0.18);
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .capture-button:hover {
-  background: var(--baby-blue-dark);
+  background: var(--red-dark);
+  border-color: var(--red-dark);
+  box-shadow: 0 4px 12px rgba(200, 14, 37, 0.24);
+  transform: translateY(-1px);
+}
+
+.capture-button:active {
+  transform: translateY(0);
+}
+
+.capture-button:focus-visible,
+.settings button:focus-visible,
+.tab:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .settings {
@@ -97,9 +144,17 @@ body {
   display: flex;
   gap: 12px;
   padding: 10px;
-  background: #f7fcff;
-  border: 2px solid var(--baby-blue);
+  background: var(--white);
+  border: 1px solid var(--border);
   border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(32, 33, 36, 0.05);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.setting-card:hover,
+.setting-card:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 7px rgba(32, 33, 36, 0.08);
 }
 
 .setting-card-field {
@@ -125,12 +180,13 @@ body {
 .setting-heading label {
   font-size: 0.86rem;
   font-weight: 800;
+  color: var(--charcoal);
   cursor: pointer;
 }
 
 .setting-description {
   margin-top: 3px;
-  color: #3d718a;
+  color: var(--muted);
   font-size: 0.73rem;
   font-weight: 600;
   line-height: 1.35;
@@ -147,17 +203,28 @@ body {
   width: 100%;
   font: inherit;
   font-weight: 700;
-  color: var(--text);
+  color: var(--charcoal);
   background: var(--white);
-  border: 2px solid var(--baby-blue);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 7px 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.setting-control input::placeholder {
+  color: #92959a;
+}
+
+.setting-control input:hover,
+.setting-control select:hover {
+  border-color: #8f9298;
 }
 
 .setting-control input:focus,
 .setting-control select:focus {
   outline: none;
-  border-color: var(--baby-blue-dark);
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .setting-card-toggle input[type="checkbox"] {
@@ -165,23 +232,35 @@ body {
   width: 20px;
   height: 20px;
   padding: 0;
-  accent-color: var(--baby-blue-dark);
+  accent-color: var(--red);
   cursor: pointer;
+}
+
+.setting-card-toggle input[type="checkbox"]:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .settings button {
   font: inherit;
   font-weight: 800;
   color: var(--white);
-  background: var(--baby-blue);
-  border: none;
-  border-radius: 6px;
+  background: var(--red);
+  border: 1px solid var(--red);
+  border-radius: 7px;
   padding: 8px;
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .settings button:hover {
-  background: var(--baby-blue-dark);
+  background: var(--red-dark);
+  border-color: var(--red-dark);
+  transform: translateY(-1px);
+}
+
+.settings button:active {
+  transform: translateY(0);
 }
 
 .dir-row {
@@ -204,7 +283,8 @@ body {
 .settings .restore-button {
   align-self: flex-start;
   background: none;
-  color: var(--baby-blue-dark);
+  color: var(--red-dark);
+  border-color: transparent;
   padding: 2px 0;
   font-size: 0.78rem;
   text-decoration: underline;
@@ -212,10 +292,13 @@ body {
 
 .settings .restore-button:hover {
   background: none;
-  color: var(--text);
+  color: var(--charcoal);
+  border-color: transparent;
+  transform: none;
 }
 
 .settings-status {
+  color: var(--muted);
   font-size: 0.85rem;
   text-align: center;
   min-height: 1em;
@@ -226,32 +309,52 @@ body {
   letter-spacing: 0.04em;
 }
 
-/* Tabs */
 .tabs {
   display: flex;
-  background: var(--baby-blue);
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
 }
 
 .tab {
+  position: relative;
   flex: 1 1 0;
   font: inherit;
   font-weight: 800;
-  color: var(--white);
-  background: var(--baby-blue);
+  color: var(--muted);
+  background: var(--white);
   border: none;
-  border-bottom: 3px solid transparent;
-  padding: 10px;
+  padding: 11px 8px 12px;
   cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.tab::after {
+  position: absolute;
+  right: 18px;
+  bottom: -1px;
+  left: 18px;
+  height: 3px;
+  content: "";
+  background: var(--red);
+  border-radius: 3px 3px 0 0;
+  opacity: 0;
+  transform: scaleX(0.7);
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .tab:hover {
-  background: var(--baby-blue-dark);
+  color: var(--charcoal);
+  background: var(--red-soft);
 }
 
 .tab.is-active {
   background: var(--white);
-  color: var(--text);
-  border-bottom-color: var(--baby-blue-dark);
+  color: var(--charcoal);
+}
+
+.tab.is-active::after {
+  opacity: 1;
+  transform: scaleX(1);
 }
 
 .tab-panel {
@@ -265,7 +368,6 @@ body {
   display: none;
 }
 
-/* Help indicator + tooltip */
 .help {
   position: relative;
   display: inline-flex;
@@ -274,7 +376,7 @@ body {
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  color: var(--baby-blue-dark);
+  color: var(--red-dark);
   font-size: 0.9rem;
   line-height: 1;
   border-radius: 50%;
@@ -282,7 +384,7 @@ body {
 }
 
 .help:focus-visible {
-  outline: 2px solid var(--baby-blue-dark);
+  outline: 2px solid var(--red);
   outline-offset: 2px;
 }
 
@@ -293,7 +395,7 @@ body {
   width: max-content;
   max-width: min(240px, calc(100vw - 64px));
   padding: 7px 9px;
-  background: var(--text);
+  background: var(--charcoal);
   color: var(--white);
   font-size: 0.72rem;
   font-weight: 700;
@@ -314,7 +416,7 @@ body {
   bottom: 100%;
   left: 6px;
   border: 5px solid transparent;
-  border-bottom-color: var(--text);
+  border-bottom-color: var(--charcoal);
 }
 
 .help:hover .tooltip,
@@ -322,4 +424,12 @@ body {
 .help:focus-visible .tooltip {
   opacity: 1;
   visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

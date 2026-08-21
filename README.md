@@ -141,7 +141,7 @@ The **Settings** tab persists to `config/app.cfg` and controls:
 │       │   ├── configs/              # settings model + config/app.cfg persistence
 │       │   ├── notify/               # native Windows toast notifications
 │       │   ├── saves/                # save workflow + image/clipboard helpers
-│       │   ├── screen_grab/          # free-roam region-capture overlay
+│       │   ├── screen_grab/          # capture orchestration, overlay, drawing, and geometry
 │       │   ├── start_menu/           # verified per-user Start Menu shortcut
 │       │   └── tray/                 # system tray icon and controls
 │       ├── helpers/
