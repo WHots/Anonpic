@@ -129,11 +129,7 @@ fn create_shortcut()
     let path = match shortcut_path()
     {
         Some(path) => path,
-        None =>
-        {
-            eprintln!("start_menu: APPDATA not set; cannot locate Start Menu");
-            return;
-        }
+        None => return,
     };
 
     if path.exists()
@@ -177,7 +173,10 @@ fn remove_shortcut()
     {
         if let Some(hash_file) = hash_path()
         {
-            let _ = std::fs::remove_file(hash_file);
+            if hash_file.exists() && std::fs::remove_file(&hash_file).is_err()
+            {
+                eprintln!("start_menu: failed to remove stale shortcut hash");
+            }
         }
         return;
     }
@@ -189,11 +188,18 @@ fn remove_shortcut()
     {
         (Some(stored), Some(actual)) if stored == actual =>
         {
-            let _ = std::fs::remove_file(&path);
+            if std::fs::remove_file(&path).is_err()
+            {
+                eprintln!("start_menu: failed to remove {}", path.display());
+                return;
+            }
 
             if let Some(hash_file) = hash_path()
             {
-                let _ = std::fs::remove_file(hash_file);
+                if hash_file.exists() && std::fs::remove_file(&hash_file).is_err()
+                {
+                    eprintln!("start_menu: failed to remove the shortcut hash");
+                }
             }
         }
         _ => eprintln!("start_menu: shortcut hash missing or mismatched; leaving {} in place", path.display()),
@@ -277,7 +283,11 @@ fn record_hash(shortcut: &Path)
 
     if let Some(dir) = hash_file.parent()
     {
-        let _ = std::fs::create_dir_all(dir);
+        if std::fs::create_dir_all(dir).is_err()
+        {
+            eprintln!("start_menu: failed to create the shortcut hash directory");
+            return;
+        }
     }
 
     if std::fs::write(&hash_file, hash).is_err()
@@ -363,7 +373,15 @@ fn sha256_hex(data: &[u8]) -> Option<String>
 /// when `APPDATA` is not set.
 fn shortcut_path() -> Option<PathBuf>
 {
-    let appdata = std::env::var_os("APPDATA")?;
+    let appdata = match std::env::var_os("APPDATA")
+    {
+        Some(appdata) => appdata,
+        None =>
+        {
+            eprintln!("start_menu: APPDATA not set; cannot locate Start Menu");
+            return None;
+        }
+    };
 
     Some(Path::new(&appdata).join("Microsoft").join("Windows").join("Start Menu").join("Programs").join(SHORTCUT_NAME))
 }
@@ -373,5 +391,15 @@ fn shortcut_path() -> Option<PathBuf>
 /// directory, or `None` when the working directory cannot be determined.
 fn hash_path() -> Option<PathBuf>
 {
-    Some(config_master::config_dir()?.join(HASH_FILE))
+    let directory = match config_master::config_dir()
+    {
+        Some(directory) => directory,
+        None =>
+        {
+            eprintln!("start_menu: failed to resolve the shortcut hash directory");
+            return None;
+        }
+    };
+
+    Some(directory.join(HASH_FILE))
 }

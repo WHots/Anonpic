@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::ptr;
 
 use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
+use windows_sys::Win32::Graphics::Dwm::DwmFlush;
 use windows_sys::Win32::Graphics::Gdi::{
     BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreatePen, CreateSolidBrush,
     DeleteDC, DeleteObject, Ellipse, EndPaint, FillRect, FrameRect, GetStockObject,
@@ -92,26 +93,36 @@ impl BackBuffer
 
         *slot = None;
 
-        // SAFETY: `window_dc` is a live DC; created objects are owned by the
-        // returned BackBuffer and released in its Drop.
-        let dc = unsafe { CreateCompatibleDC(window_dc) };
-        if dc.is_null()
+        // SAFETY: `window_dc` is live, created handles are checked, and ownership
+        // of the selected bitmap and DC moves into the returned `BackBuffer`.
+        unsafe
         {
-            eprintln!("overlay: failed to create back-buffer DC");
-            return None;
-        }
+            let dc = CreateCompatibleDC(window_dc);
+            if dc.is_null()
+            {
+                eprintln!("overlay: failed to create back-buffer DC");
+                return None;
+            }
 
-        let bitmap = unsafe { CreateCompatibleBitmap(window_dc, width, height) };
-        if bitmap.is_null()
-        {
-            eprintln!("overlay: failed to create back-buffer bitmap");
-            unsafe { DeleteDC(dc) };
-            return None;
-        }
+            let bitmap = CreateCompatibleBitmap(window_dc, width, height);
+            if bitmap.is_null()
+            {
+                eprintln!("overlay: failed to create back-buffer bitmap");
+                DeleteDC(dc);
+                return None;
+            }
 
-        let previous_bitmap = unsafe { SelectObject(dc, bitmap) };
-        *slot = Some(BackBuffer { dc, bitmap, previous_bitmap, width, height });
-        Some(dc)
+            let previous_bitmap = SelectObject(dc, bitmap);
+            if previous_bitmap.is_null()
+            {
+                eprintln!("overlay: failed to select the back-buffer bitmap");
+                DeleteObject(bitmap);
+                DeleteDC(dc);
+                return None;
+            }
+            *slot = Some(BackBuffer { dc, bitmap, previous_bitmap, width, height });
+            Some(dc)
+        }
     }
 }
 
@@ -120,24 +131,36 @@ impl Drop for BackBuffer
     /// Restores the DC's original bitmap and frees the buffer's GDI objects.
     fn drop(&mut self)
     {
-        // SAFETY: this buffer owns `dc` and `bitmap`; each is released once.
-        unsafe { SelectObject(self.dc, self.previous_bitmap) };
-        unsafe { DeleteObject(self.bitmap) };
-        unsafe { DeleteDC(self.dc) };
+        // SAFETY: this buffer owns `dc` and `bitmap`; the original object is
+        // restored before both owned handles are released exactly once.
+        unsafe
+        {
+            SelectObject(self.dc, self.previous_bitmap);
+            if DeleteObject(self.bitmap) == 0
+            {
+                eprintln!("overlay: failed to release the back-buffer bitmap");
+            }
+            if DeleteDC(self.dc) == 0
+            {
+                eprintln!("overlay: failed to release the back-buffer DC");
+            }
+        }
     }
 }
 
 thread_local!
 {
     static SELECTION: RefCell<Selection> = RefCell::new(Selection::default());
-    static BACK_BUFFER: RefCell<Option<BackBuffer>> = RefCell::new(None);
+    static BACK_BUFFER: RefCell<Option<BackBuffer>> = const { RefCell::new(None) };
     static CIRCULAR: Cell<bool> = const { Cell::new(false) };
+    static FROZEN_BITMAP: Cell<HBITMAP> = const { Cell::new(ptr::null_mut()) };
 }
 
 
-/// Snapshots the virtual desktop, shows the selection overlay, and saves the
-/// chosen region as a cleaned PNG. Returns the saved path, or `None` if the user
-/// cancelled or any step failed.
+/// Shows the selection overlay and saves the chosen region as a cleaned image.
+/// When configured, the overlay displays and crops the same frozen desktop
+/// frame; otherwise the selected region is captured after the overlay closes.
+/// Returns the saved path, or `None` if the user cancelled or a step failed.
 pub fn capture_and_save() -> Option<PathBuf>
 {
     let (origin_x, origin_y, width, height) = virtual_screen();
@@ -147,19 +170,41 @@ pub fn capture_and_save() -> Option<PathBuf>
         return None;
     }
 
-    let snapshot = Screenshot::capture_region(origin_x, origin_y, width, height)?;
+    let config = config_master::load_config();
+    let circular = config.as_ref().map(|config| config.circular_selection).unwrap_or(false);
+    let freeze_screen = config.as_ref().map(|config| config.freeze_screen_on_capture).unwrap_or(true);
+    let snapshot = if freeze_screen { Some(Screenshot::capture_region(origin_x, origin_y, width, height)?) } else { None };
 
-    let circular = config_master::load_config().map(|config| config.circular_selection).unwrap_or(false);
     CIRCULAR.with(|flag| flag.set(circular));
+    FROZEN_BITMAP.with(|bitmap| bitmap.set(snapshot.as_ref().map(Screenshot::bitmap).unwrap_or(ptr::null_mut())));
 
     SELECTION.with(|selection| *selection.borrow_mut() = Selection::default());
 
-    let hwnd = create_overlay(origin_x, origin_y, width, height)?;
+    let hwnd = match create_overlay(origin_x, origin_y, width, height, freeze_screen)
+    {
+        Some(hwnd) => hwnd,
+        None =>
+        {
+            FROZEN_BITMAP.with(|bitmap| bitmap.set(ptr::null_mut()));
+            return None;
+        }
+    };
 
     pump_messages();
 
     // SAFETY: `hwnd` is the overlay window created above on this thread.
     unsafe { DestroyWindow(hwnd) };
+    FROZEN_BITMAP.with(|bitmap| bitmap.set(ptr::null_mut()));
+
+    if snapshot.is_none()
+    {
+        // SAFETY: `DwmFlush` takes no pointers and only waits for pending desktop
+        // composition work so the destroyed overlay is absent from the capture.
+        if unsafe { DwmFlush() } != 0
+        {
+            eprintln!("overlay: failed to flush desktop composition");
+        }
+    }
 
     let selection = SELECTION.with(|selection| *selection.borrow());
 
@@ -178,8 +223,12 @@ pub fn capture_and_save() -> Option<PathBuf>
         return None;
     }
 
-    let cropped = snapshot.crop(region.left, region.top, region_width, region_height)?;
-    user_saves::save_screenshot(&cropped, circular)
+    let captured = match snapshot
+    {
+        Some(snapshot) => snapshot.crop(region.left, region.top, region_width, region_height)?,
+        None => Screenshot::capture_region(origin_x + region.left, origin_y + region.top, region_width, region_height)?,
+    };
+    user_saves::save_screenshot(&captured, circular)
 }
 
 
@@ -206,64 +255,106 @@ pub fn start_free_roam_capture()
 /// Returns the virtual desktop as `(origin_x, origin_y, width, height)`.
 fn virtual_screen() -> (i32, i32, i32, i32)
 {
-    let origin_x = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
-    let origin_y = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
-    let width = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
-    let height = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
-    (origin_x, origin_y, width, height)
+    // SAFETY: these metric indices require no pointers or caller-owned handles.
+    unsafe
+    {
+        let origin_x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        let origin_y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        let width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        let height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        (origin_x, origin_y, width, height)
+    }
 }
 
 
 /// Creates and shows the topmost layered overlay covering the given rectangle.
+/// Uses full opacity when `freeze_screen` is set so the frozen bitmap fully
+/// replaces the changing desktop beneath it.
 /// Registering the window class again after a previous capture fails
 /// harmlessly; the class persists for the process, so creation still succeeds.
 /// Returns `None` when the window cannot be created.
-fn create_overlay(x: i32, y: i32, width: i32, height: i32) -> Option<HWND>
+fn create_overlay(x: i32, y: i32, width: i32, height: i32, freeze_screen: bool) -> Option<HWND>
 {
-    let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
-    let class_name: Vec<u16> = "AnonpicRegionOverlay\0".encode_utf16().collect();
-    let cursor = unsafe { LoadCursorW(ptr::null_mut(), IDC_CROSS) };
-
-    let wnd_class = WNDCLASSW
+    // SAFETY: all class and title pointers remain live through registration and
+    // creation; the returned window handle is checked before subsequent calls.
+    unsafe
     {
-        style: 0,
-        lpfnWndProc: Some(overlay_proc),
-        cbClsExtra: 0,
-        cbWndExtra: 0,
-        hInstance: hinstance,
-        hIcon: ptr::null_mut(),
-        hCursor: cursor,
-        hbrBackground: ptr::null_mut(),
-        lpszMenuName: ptr::null(),
-        lpszClassName: class_name.as_ptr(),
-    };
+        let hinstance = GetModuleHandleW(ptr::null());
+        if hinstance.is_null()
+        {
+            eprintln!("overlay: failed to resolve the executable module");
+            return None;
+        }
 
-    // SAFETY: `wnd_class` and `class_name` are locals that outlive the calls.
-    unsafe { RegisterClassW(&wnd_class) };
+        let class_name: Vec<u16> = "AnonpicRegionOverlay\0".encode_utf16().collect();
+        let cursor = LoadCursorW(ptr::null_mut(), IDC_CROSS);
+        if cursor.is_null()
+        {
+            eprintln!("overlay: failed to load the selection cursor");
+            return None;
+        }
 
-    let hwnd = unsafe { CreateWindowExW(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, class_name.as_ptr(), ptr::null(), WS_POPUP, x, y, width, height, ptr::null_mut(), ptr::null_mut(), hinstance, ptr::null()) };
-    if hwnd.is_null()
-    {
-        eprintln!("overlay: failed to create overlay window");
-        return None;
+        let wnd_class = WNDCLASSW
+        {
+            style: 0,
+            lpfnWndProc: Some(overlay_proc),
+            cbClsExtra: 0,
+            cbWndExtra: 0,
+            hInstance: hinstance,
+            hIcon: ptr::null_mut(),
+            hCursor: cursor,
+            hbrBackground: ptr::null_mut(),
+            lpszMenuName: ptr::null(),
+            lpszClassName: class_name.as_ptr(),
+        };
+
+        RegisterClassW(&wnd_class);
+
+        let hwnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, class_name.as_ptr(), ptr::null(), WS_POPUP, x, y, width, height, ptr::null_mut(), ptr::null_mut(), hinstance, ptr::null());
+        if hwnd.is_null()
+        {
+            eprintln!("overlay: failed to create overlay window");
+            return None;
+        }
+
+        let alpha = if freeze_screen { u8::MAX } else { OVERLAY_ALPHA };
+        if SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA) == 0
+        {
+            eprintln!("overlay: failed to apply overlay transparency");
+        }
+        ShowWindow(hwnd, SW_SHOW);
+        if SetForegroundWindow(hwnd) == 0
+        {
+            eprintln!("overlay: failed to focus the overlay window");
+        }
+        Some(hwnd)
     }
-
-    unsafe { SetLayeredWindowAttributes(hwnd, 0, OVERLAY_ALPHA, LWA_ALPHA) };
-    unsafe { ShowWindow(hwnd, SW_SHOW) };
-    unsafe { SetForegroundWindow(hwnd) };
-    Some(hwnd)
 }
 
 
 /// Pumps the thread's message queue until the overlay posts `WM_QUIT`.
 fn pump_messages()
 {
-    // SAFETY: `msg` is a local out-parameter; MSG is valid when zeroed.
-    let mut msg: MSG = unsafe { std::mem::zeroed() };
-    while unsafe { GetMessageW(&mut msg, ptr::null_mut(), 0, 0) } > 0
+    // SAFETY: `msg` is initialized for Win32 and remains live while each
+    // retrieved message is translated and dispatched on this thread.
+    unsafe
     {
-        unsafe { TranslateMessage(&msg) };
-        unsafe { DispatchMessageW(&msg) };
+        let mut msg: MSG = std::mem::zeroed();
+        loop
+        {
+            let status = GetMessageW(&mut msg, ptr::null_mut(), 0, 0);
+            if status == 0
+            {
+                break;
+            }
+            if status < 0
+            {
+                eprintln!("overlay: failed to read the message queue");
+                break;
+            }
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
     }
 }
 
@@ -274,47 +365,114 @@ fn pump_messages()
 /// paint still happens.
 fn paint_overlay(hwnd: HWND)
 {
-    // SAFETY: `ps` is a local out-parameter; PAINTSTRUCT is valid when zeroed.
-    let mut ps: PAINTSTRUCT = unsafe { std::mem::zeroed() };
-    let hdc = unsafe { BeginPaint(hwnd, &mut ps) };
-    if hdc.is_null()
+    // SAFETY: `hwnd` comes from this module's window procedure, paint and client
+    // structures stay live, and every successful `BeginPaint` is ended once.
+    unsafe
     {
-        return;
-    }
-
-    let mut client = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-    unsafe { GetClientRect(hwnd, &mut client) };
-    let width = client.right - client.left;
-    let height = client.bottom - client.top;
-
-    BACK_BUFFER.with(|buffer|
-    {
-        let mut slot = buffer.borrow_mut();
-        match BackBuffer::memory_dc(&mut slot, hdc, width, height)
+        let mut ps: PAINTSTRUCT = std::mem::zeroed();
+        let hdc = BeginPaint(hwnd, &mut ps);
+        if hdc.is_null()
         {
-            Some(memory_dc) =>
-            {
-                paint_scene(memory_dc, &client);
-                unsafe { BitBlt(hdc, 0, 0, width, height, memory_dc, 0, 0, SRCCOPY) };
-            }
-            None => paint_scene(hdc, &client),
+            eprintln!("overlay: failed to begin painting");
+            return;
         }
-    });
 
-    unsafe { EndPaint(hwnd, &ps) };
+        let mut client = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+        if GetClientRect(hwnd, &mut client) == 0
+        {
+            eprintln!("overlay: failed to read the client rectangle");
+        }
+        let width = client.right - client.left;
+        let height = client.bottom - client.top;
+
+        BACK_BUFFER.with(|buffer|
+        {
+            let mut slot = buffer.borrow_mut();
+            match BackBuffer::memory_dc(&mut slot, hdc, width, height)
+            {
+                Some(memory_dc) =>
+                {
+                    paint_scene(memory_dc, &client);
+                    if BitBlt(hdc, 0, 0, width, height, memory_dc, 0, 0, SRCCOPY) == 0
+                    {
+                        eprintln!("overlay: failed to copy the back buffer");
+                    }
+                }
+                None => paint_scene(hdc, &client),
+            }
+        });
+
+        if EndPaint(hwnd, &ps) == 0
+        {
+            eprintln!("overlay: failed to finish painting");
+        }
+    }
 }
 
 
-/// Draws the dimmed backdrop, the selection outline, and the live size label onto
-/// `hdc`, which is normally the back buffer.
+/// Draws either the frozen desktop or dimmed live backdrop, then the selection
+/// outline and live size label, onto `hdc`.
 fn paint_scene(hdc: HDC, client: &RECT)
 {
-    // SAFETY: created GDI objects are used with the live `hdc` and freed here.
-    let background = unsafe { CreateSolidBrush(rgb(20, 20, 20)) };
-    if !background.is_null()
+    let frozen_bitmap = FROZEN_BITMAP.with(|bitmap| bitmap.get());
+    if frozen_bitmap.is_null()
     {
-        unsafe { FillRect(hdc, client, background) };
-        unsafe { DeleteObject(background) };
+        // SAFETY: `hdc` and `client` are live for painting, and the created brush
+        // is checked and released before leaving this region.
+        unsafe
+        {
+            let background = CreateSolidBrush(rgb(20, 20, 20));
+            if background.is_null()
+            {
+                eprintln!("overlay: failed to create the background brush");
+            }
+            else
+            {
+                if FillRect(hdc, client, background) == 0
+                {
+                    eprintln!("overlay: failed to paint the background");
+                }
+                if DeleteObject(background) == 0
+                {
+                    eprintln!("overlay: failed to release the background brush");
+                }
+            }
+        }
+    }
+    else
+    {
+        // SAFETY: `frozen_bitmap` is owned by the live snapshot for the entire
+        // message loop; selected objects are restored and the temporary DC freed.
+        unsafe
+        {
+            let source_dc = CreateCompatibleDC(hdc);
+            if source_dc.is_null()
+            {
+                eprintln!("overlay: failed to create the frozen-frame DC");
+            }
+            else
+            {
+                let previous = SelectObject(source_dc, frozen_bitmap);
+                if previous.is_null()
+                {
+                    eprintln!("overlay: failed to select the frozen frame");
+                }
+                else
+                {
+                    let width = client.right - client.left;
+                    let height = client.bottom - client.top;
+                    if BitBlt(hdc, 0, 0, width, height, source_dc, 0, 0, SRCCOPY) == 0
+                    {
+                        eprintln!("overlay: failed to draw the frozen frame");
+                    }
+                    SelectObject(source_dc, previous);
+                }
+                if DeleteDC(source_dc) == 0
+                {
+                    eprintln!("overlay: failed to release the frozen-frame DC");
+                }
+            }
+        }
     }
 
     let selection = SELECTION.with(|selection| *selection.borrow());
@@ -330,11 +488,26 @@ fn paint_scene(hdc: HDC, client: &RECT)
             }
             else
             {
-                let border = unsafe { CreateSolidBrush(rgb(255, 255, 255)) };
-                if !border.is_null()
+                // SAFETY: `hdc` and `region` are live, and the temporary brush
+                // is checked and released after the frame is drawn.
+                unsafe
                 {
-                    unsafe { FrameRect(hdc, &region, border) };
-                    unsafe { DeleteObject(border) };
+                    let border = CreateSolidBrush(rgb(255, 255, 255));
+                    if border.is_null()
+                    {
+                        eprintln!("overlay: failed to create the selection brush");
+                    }
+                    else
+                    {
+                        if FrameRect(hdc, &region, border) == 0
+                        {
+                            eprintln!("overlay: failed to draw the selection frame");
+                        }
+                        if DeleteObject(border) == 0
+                        {
+                            eprintln!("overlay: failed to release the selection brush");
+                        }
+                    }
                 }
             }
         }
@@ -352,23 +525,39 @@ fn paint_scene(hdc: HDC, client: &RECT)
 /// circle's bounding square, so the ellipse call renders a true circle.
 fn draw_circular_selection(hdc: HDC, region: &RECT)
 {
-    // SAFETY: the pen is owned here; original objects are restored before it is freed.
-    let pen = unsafe { CreatePen(PS_SOLID, 1, rgb(255, 255, 255)) };
-    if pen.is_null()
+    // SAFETY: `hdc` and `region` are live, created objects are checked, selected
+    // objects are restored, and the owned pen is released exactly once.
+    unsafe
     {
-        eprintln!("overlay: failed to create selection pen");
-        return;
+        let pen = CreatePen(PS_SOLID, 1, rgb(255, 255, 255));
+        if pen.is_null()
+        {
+            eprintln!("overlay: failed to create selection pen");
+            return;
+        }
+
+        let hollow = GetStockObject(NULL_BRUSH);
+        if hollow.is_null()
+        {
+            eprintln!("overlay: failed to load the hollow brush");
+            DeleteObject(pen);
+            return;
+        }
+
+        let previous_pen = SelectObject(hdc, pen);
+        let previous_brush = SelectObject(hdc, hollow);
+        if Ellipse(hdc, region.left, region.top, region.right, region.bottom) == 0
+        {
+            eprintln!("overlay: failed to draw the circular selection");
+        }
+
+        SelectObject(hdc, previous_pen);
+        SelectObject(hdc, previous_brush);
+        if DeleteObject(pen) == 0
+        {
+            eprintln!("overlay: failed to release the selection pen");
+        }
     }
-
-    let hollow = unsafe { GetStockObject(NULL_BRUSH) };
-    let previous_pen = unsafe { SelectObject(hdc, pen) };
-    let previous_brush = unsafe { SelectObject(hdc, hollow) };
-
-    unsafe { Ellipse(hdc, region.left, region.top, region.right, region.bottom) };
-
-    unsafe { SelectObject(hdc, previous_pen) };
-    unsafe { SelectObject(hdc, previous_brush) };
-    unsafe { DeleteObject(pen) };
 }
 
 
@@ -382,46 +571,70 @@ fn draw_size_label(hdc: HDC, client: &RECT, region: &RECT, cursor: POINT)
 
     let text: Vec<u16> = format!("{} × {}", width, height).encode_utf16().collect();
 
-    // SAFETY: `text` outlives the calls; the stock font needs no cleanup and the
-    // previous font is restored before returning.
-    let font = unsafe { GetStockObject(DEFAULT_GUI_FONT) };
-    let previous_font = unsafe { SelectObject(hdc, font) };
-
-    let mut size = SIZE { cx: 0, cy: 0 };
-    unsafe { GetTextExtentPoint32W(hdc, text.as_ptr(), text.len() as i32, &mut size) };
-
-    const PADDING: i32 = 4;
-    const OFFSET: i32 = 14;
-    let box_width = size.cx + PADDING * 2;
-    let box_height = size.cy + PADDING * 2;
-
-    let mut left = cursor.x + OFFSET;
-    if left + box_width > client.right
+    // SAFETY: `hdc`, `client`, and `region` are live, `text` outlives each call,
+    // selected objects are restored, and the temporary brush is released.
+    unsafe
     {
-        left = cursor.x - OFFSET - box_width;
+        let font = GetStockObject(DEFAULT_GUI_FONT);
+        if font.is_null()
+        {
+            eprintln!("overlay: failed to load the label font");
+            return;
+        }
+        let previous_font = SelectObject(hdc, font);
+
+        let mut size = SIZE { cx: 0, cy: 0 };
+        if GetTextExtentPoint32W(hdc, text.as_ptr(), text.len() as i32, &mut size) == 0
+        {
+            eprintln!("overlay: failed to measure the size label");
+        }
+
+        const PADDING: i32 = 4;
+        const OFFSET: i32 = 14;
+        let box_width = size.cx + PADDING * 2;
+        let box_height = size.cy + PADDING * 2;
+
+        let mut left = cursor.x + OFFSET;
+        if left + box_width > client.right
+        {
+            left = cursor.x - OFFSET - box_width;
+        }
+        let mut top = cursor.y + OFFSET;
+        if top + box_height > client.bottom
+        {
+            top = cursor.y - OFFSET - box_height;
+        }
+        left = left.max(0);
+        top = top.max(0);
+
+        let box_rect = RECT { left, top, right: left + box_width, bottom: top + box_height };
+
+        let backing = CreateSolidBrush(rgb(20, 20, 20));
+        if backing.is_null()
+        {
+            eprintln!("overlay: failed to create the label background brush");
+        }
+        else
+        {
+            if FillRect(hdc, &box_rect, backing) == 0
+            {
+                eprintln!("overlay: failed to paint the label background");
+            }
+            if DeleteObject(backing) == 0
+            {
+                eprintln!("overlay: failed to release the label background brush");
+            }
+        }
+
+        SetBkMode(hdc, TRANSPARENT as i32);
+        SetTextColor(hdc, rgb(255, 255, 255));
+        if TextOutW(hdc, left + PADDING, top + PADDING, text.as_ptr(), text.len() as i32) == 0
+        {
+            eprintln!("overlay: failed to draw the size label");
+        }
+
+        SelectObject(hdc, previous_font);
     }
-    let mut top = cursor.y + OFFSET;
-    if top + box_height > client.bottom
-    {
-        top = cursor.y - OFFSET - box_height;
-    }
-    left = left.max(0);
-    top = top.max(0);
-
-    let box_rect = RECT { left, top, right: left + box_width, bottom: top + box_height };
-
-    let backing = unsafe { CreateSolidBrush(rgb(20, 20, 20)) };
-    if !backing.is_null()
-    {
-        unsafe { FillRect(hdc, &box_rect, backing) };
-        unsafe { DeleteObject(backing) };
-    }
-
-    unsafe { SetBkMode(hdc, TRANSPARENT as i32) };
-    unsafe { SetTextColor(hdc, rgb(255, 255, 255)) };
-    unsafe { TextOutW(hdc, left + PADDING, top + PADDING, text.as_ptr(), text.len() as i32) };
-
-    unsafe { SelectObject(hdc, previous_font) };
 }
 
 

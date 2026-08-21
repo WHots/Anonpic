@@ -10,6 +10,7 @@ async function loadSettings() {
   document.querySelector("#auto-save").checked = true;
   document.querySelector("#copy-to-clipboard").checked = false;
   document.querySelector("#circular-selection").checked = false;
+  document.querySelector("#freeze-screen-on-capture").checked = true;
   document.querySelector("#ignore-self").checked = false;
   document.querySelector("#fill-custom-data").checked = false;
   document.querySelector("#start-menu-shortcut").checked = true;
@@ -23,6 +24,7 @@ async function loadSettings() {
       document.querySelector("#auto-save").checked = config.auto_save ?? true;
       document.querySelector("#copy-to-clipboard").checked = config.copy_to_clipboard ?? false;
       document.querySelector("#circular-selection").checked = config.circular_selection ?? false;
+      document.querySelector("#freeze-screen-on-capture").checked = config.freeze_screen_on_capture ?? true;
       document.querySelector("#ignore-self").checked = config.ignore_self ?? false;
       document.querySelector("#fill-custom-data").checked = config.fill_custom_data ?? false;
       document.querySelector("#start-menu-shortcut").checked = config.start_menu_shortcut ?? true;
@@ -40,6 +42,7 @@ async function saveSettings(statusSelector = "#settings-status", successText = "
     auto_save: document.querySelector("#auto-save").checked,
     copy_to_clipboard: document.querySelector("#copy-to-clipboard").checked,
     circular_selection: document.querySelector("#circular-selection").checked,
+    freeze_screen_on_capture: document.querySelector("#freeze-screen-on-capture").checked,
     ignore_self: document.querySelector("#ignore-self").checked,
     fill_custom_data: document.querySelector("#fill-custom-data").checked,
     start_menu_shortcut: document.querySelector("#start-menu-shortcut").checked,

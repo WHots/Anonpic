@@ -27,42 +27,45 @@ impl Screenshot
             return None;
         }
 
-        // SAFETY: every DC and GDI object acquired below is released on each
-        // path; the bitmap's ownership moves into the returned Screenshot.
-        let screen_dc = unsafe { GetDC(ptr::null_mut()) };
-        if screen_dc.is_null()
+        // SAFETY: every acquired handle is checked before use, selected objects
+        // are restored, and each DC or failed bitmap is released exactly once.
+        unsafe
         {
-            return None;
+            let screen_dc = GetDC(ptr::null_mut());
+            if screen_dc.is_null()
+            {
+                return None;
+            }
+
+            let memory_dc = CreateCompatibleDC(screen_dc);
+            if memory_dc.is_null()
+            {
+                ReleaseDC(ptr::null_mut(), screen_dc);
+                return None;
+            }
+
+            let bitmap = CreateCompatibleBitmap(screen_dc, width, height);
+            if bitmap.is_null()
+            {
+                DeleteDC(memory_dc);
+                ReleaseDC(ptr::null_mut(), screen_dc);
+                return None;
+            }
+
+            let previous = SelectObject(memory_dc, bitmap);
+            let copied = BitBlt(memory_dc, 0, 0, width, height, screen_dc, x, y, SRCCOPY);
+            SelectObject(memory_dc, previous);
+            DeleteDC(memory_dc);
+            ReleaseDC(ptr::null_mut(), screen_dc);
+
+            if copied == 0
+            {
+                DeleteObject(bitmap);
+                return None;
+            }
+
+            Some(Screenshot { bitmap, width, height })
         }
-
-        let memory_dc = unsafe { CreateCompatibleDC(screen_dc) };
-        if memory_dc.is_null()
-        {
-            unsafe { ReleaseDC(ptr::null_mut(), screen_dc) };
-            return None;
-        }
-
-        let bitmap = unsafe { CreateCompatibleBitmap(screen_dc, width, height) };
-        if bitmap.is_null()
-        {
-            unsafe { DeleteDC(memory_dc) };
-            unsafe { ReleaseDC(ptr::null_mut(), screen_dc) };
-            return None;
-        }
-
-        let previous = unsafe { SelectObject(memory_dc, bitmap) };
-        let copied = unsafe { BitBlt(memory_dc, 0, 0, width, height, screen_dc, x, y, SRCCOPY) };
-        unsafe { SelectObject(memory_dc, previous) };
-        unsafe { DeleteDC(memory_dc) };
-        unsafe { ReleaseDC(ptr::null_mut(), screen_dc) };
-
-        if copied == 0
-        {
-            unsafe { DeleteObject(bitmap) };
-            return None;
-        }
-
-        Some(Screenshot { bitmap, width, height })
     }
 
 
@@ -76,51 +79,54 @@ impl Screenshot
             return None;
         }
 
-        // SAFETY: every DC and GDI object acquired below is released on each
-        // path; the bitmap's ownership moves into the returned Screenshot.
-        let screen_dc = unsafe { GetDC(ptr::null_mut()) };
-        if screen_dc.is_null()
+        // SAFETY: source dimensions were validated, all acquired handles are
+        // checked, selected objects are restored, and owned resources are freed.
+        unsafe
         {
-            return None;
-        }
-
-        let source_dc = unsafe { CreateCompatibleDC(screen_dc) };
-        let dest_dc = unsafe { CreateCompatibleDC(screen_dc) };
-        let bitmap = unsafe { CreateCompatibleBitmap(screen_dc, width, height) };
-        unsafe { ReleaseDC(ptr::null_mut(), screen_dc) };
-
-        if source_dc.is_null() || dest_dc.is_null() || bitmap.is_null()
-        {
-            if !source_dc.is_null()
+            let screen_dc = GetDC(ptr::null_mut());
+            if screen_dc.is_null()
             {
-                unsafe { DeleteDC(source_dc) };
+                return None;
             }
-            if !dest_dc.is_null()
+
+            let source_dc = CreateCompatibleDC(screen_dc);
+            let dest_dc = CreateCompatibleDC(screen_dc);
+            let bitmap = CreateCompatibleBitmap(screen_dc, width, height);
+            ReleaseDC(ptr::null_mut(), screen_dc);
+
+            if source_dc.is_null() || dest_dc.is_null() || bitmap.is_null()
             {
-                unsafe { DeleteDC(dest_dc) };
+                if !source_dc.is_null()
+                {
+                    DeleteDC(source_dc);
+                }
+                if !dest_dc.is_null()
+                {
+                    DeleteDC(dest_dc);
+                }
+                if !bitmap.is_null()
+                {
+                    DeleteObject(bitmap);
+                }
+                return None;
             }
-            if !bitmap.is_null()
+
+            let previous_source = SelectObject(source_dc, self.bitmap);
+            let previous_dest = SelectObject(dest_dc, bitmap);
+            let copied = BitBlt(dest_dc, 0, 0, width, height, source_dc, x, y, SRCCOPY);
+            SelectObject(source_dc, previous_source);
+            SelectObject(dest_dc, previous_dest);
+            DeleteDC(source_dc);
+            DeleteDC(dest_dc);
+
+            if copied == 0
             {
-                unsafe { DeleteObject(bitmap) };
+                DeleteObject(bitmap);
+                return None;
             }
-            return None;
+
+            Some(Screenshot { bitmap, width, height })
         }
-
-        let previous_source = unsafe { SelectObject(source_dc, self.bitmap) };
-        let previous_dest = unsafe { SelectObject(dest_dc, bitmap) };
-        let copied = unsafe { BitBlt(dest_dc, 0, 0, width, height, source_dc, x, y, SRCCOPY) };
-        unsafe { SelectObject(source_dc, previous_source) };
-        unsafe { SelectObject(dest_dc, previous_dest) };
-        unsafe { DeleteDC(source_dc) };
-        unsafe { DeleteDC(dest_dc) };
-
-        if copied == 0
-        {
-            unsafe { DeleteObject(bitmap) };
-            return None;
-        }
-
-        Some(Screenshot { bitmap, width, height })
     }
 
 
@@ -144,16 +150,39 @@ impl Drop for Screenshot
     /// linger in freed GDI memory.
     fn drop(&mut self)
     {
-        // SAFETY: this screenshot owns `bitmap`; the scratch DC is created and
-        // deleted here, and the bitmap is freed exactly once.
-        let dc = unsafe { CreateCompatibleDC(ptr::null_mut()) };
-        if !dc.is_null()
+        // SAFETY: this guard owns `bitmap`; the scratch DC is checked, its
+        // original object is restored, and both resources are released once.
+        unsafe
         {
-            let previous = unsafe { SelectObject(dc, self.bitmap) };
-            unsafe { PatBlt(dc, 0, 0, self.width, self.height, BLACKNESS) };
-            unsafe { SelectObject(dc, previous) };
-            unsafe { DeleteDC(dc) };
+            let dc = CreateCompatibleDC(ptr::null_mut());
+            if dc.is_null()
+            {
+                eprintln!("capture: failed to create the wipe DC");
+            }
+            else
+            {
+                let previous = SelectObject(dc, self.bitmap);
+                if previous.is_null()
+                {
+                    eprintln!("capture: failed to select the bitmap for wiping");
+                }
+                else
+                {
+                    if PatBlt(dc, 0, 0, self.width, self.height, BLACKNESS) == 0
+                    {
+                        eprintln!("capture: failed to wipe bitmap pixels");
+                    }
+                    SelectObject(dc, previous);
+                }
+                if DeleteDC(dc) == 0
+                {
+                    eprintln!("capture: failed to release the wipe DC");
+                }
+            }
+            if DeleteObject(self.bitmap) == 0
+            {
+                eprintln!("capture: failed to release the bitmap");
+            }
         }
-        unsafe { DeleteObject(self.bitmap) };
     }
 }

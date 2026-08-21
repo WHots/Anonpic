@@ -30,6 +30,10 @@ pub struct Config
     /// Draw the free-roam region selection as a circle instead of a rectangle.
     #[serde(default)]
     pub circular_selection: bool,
+    /// Show and capture the same frozen virtual-desktop frame during selection.
+    /// Defaults to `true` so older configs preserve pre-capture frame timing.
+    #[serde(default = "default_true")]
+    pub freeze_screen_on_capture: bool,
     /// Prevent Anonpic's own window from appearing in screenshots.
     #[serde(default)]
     pub ignore_self: bool,
@@ -128,7 +132,11 @@ fn persist_config(config: &Config) -> bool
     let dir = match config_dir()
     {
         Some(dir) => dir,
-        None => return false,
+        None =>
+        {
+            eprintln!("config: failed to resolve the config directory");
+            return false;
+        }
     };
 
     let dir = dir.to_string_lossy().into_owned();
@@ -164,7 +172,10 @@ fn apply_ignore_self(app: &tauri::AppHandle, ignore_self: bool)
 {
     if let Some(window) = app.get_webview_window("main")
     {
-        let _ = window.set_content_protected(ignore_self);
+        if window.set_content_protected(ignore_self).is_err()
+        {
+            eprintln!("config: failed to update screenshot protection");
+        }
     }
 }
 

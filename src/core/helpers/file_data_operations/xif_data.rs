@@ -189,7 +189,10 @@ fn finish_jpeg(path: &str, output: &[u8], removed: bool) -> StripExifResult
     if std::fs::write(&temp, output).is_err()
     {
         eprintln!("xif: failed to write temp file: {temp}");
-        let _ = std::fs::remove_file(&temp);
+        if std::path::Path::new(&temp).exists() && std::fs::remove_file(&temp).is_err()
+        {
+            eprintln!("xif: failed to remove partial temp file: {temp}");
+        }
         return StripExifResult::Failed;
     }
 
@@ -268,7 +271,13 @@ fn set_ascii_property(image: *mut GpImage, propid: u32, value: &str) -> bool
     };
 
     // SAFETY: `item.value` points into `bytes`, which outlives the call.
-    unsafe { GdipSetPropertyItem(image, &item) == 0 }
+    let applied = unsafe { GdipSetPropertyItem(image, &item) == 0 };
+    if !applied
+    {
+        eprintln!("exif: failed to write property {propid:#06x}");
+    }
+
+    applied
 }
 
 

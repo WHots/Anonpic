@@ -94,7 +94,10 @@ impl Drop for LoadedImage
     fn drop(&mut self)
     {
         // SAFETY: `handle` is the non-null image this guard owns.
-        unsafe { GdipDisposeImage(self.handle) };
+        if unsafe { GdipDisposeImage(self.handle) } != 0
+        {
+            eprintln!("gdiplus: failed to dispose an image");
+        }
     }
 }
 
@@ -216,6 +219,7 @@ fn find_encoder(image: *mut GpImage, clsid: &mut GUID) -> bool
     // SAFETY: `format` is a local out-parameter.
     if unsafe { GdipGetImageRawFormat(image, &mut format) } != 0
     {
+        eprintln!("gdiplus: failed to read the image format");
         return false;
     }
 
@@ -225,6 +229,7 @@ fn find_encoder(image: *mut GpImage, clsid: &mut GUID) -> bool
     // SAFETY: `num` and `size` are local out-parameters.
     if unsafe { GdipGetImageEncodersSize(&mut num, &mut size) } != 0 || num == 0 || size == 0
     {
+        eprintln!("gdiplus: failed to read the encoder-list size");
         return false;
     }
 
@@ -233,6 +238,7 @@ fn find_encoder(image: *mut GpImage, clsid: &mut GUID) -> bool
     // SAFETY: `buffer` is exactly `size` bytes, as GDI+ requires for the list.
     if unsafe { GdipGetImageEncoders(num, size, buffer.as_mut_ptr() as *mut ImageCodecInfo) } != 0
     {
+        eprintln!("gdiplus: failed to read the encoder list");
         return false;
     }
 

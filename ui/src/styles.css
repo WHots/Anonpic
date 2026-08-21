@@ -86,15 +86,65 @@ body {
   gap: 10px;
 }
 
-.field {
+.settings-list,
+.custom-data-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setting-card {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  background: #f7fcff;
+  border: 2px solid var(--baby-blue);
+  border-radius: 8px;
+}
+
+.setting-card-field {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.setting-card-toggle {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.setting-copy {
+  min-width: 0;
+}
+
+.setting-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.setting-heading label {
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.setting-description {
+  margin-top: 3px;
+  color: #3d718a;
+  font-size: 0.73rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setting-control {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 0.85rem;
 }
 
-.field input,
-.field select {
+.setting-control input,
+.setting-control select {
+  width: 100%;
   font: inherit;
   font-weight: 700;
   color: var(--text);
@@ -104,10 +154,19 @@ body {
   padding: 6px 8px;
 }
 
-.field input:focus,
-.field select:focus {
+.setting-control input:focus,
+.setting-control select:focus {
   outline: none;
   border-color: var(--baby-blue-dark);
+}
+
+.setting-card-toggle input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  accent-color: var(--baby-blue-dark);
+  cursor: pointer;
 }
 
 .settings button {
@@ -136,7 +195,7 @@ body {
   min-width: 0;
 }
 
-.settings .dir-row button {
+.dir-row button {
   flex: 0 0 auto;
   white-space: nowrap;
   padding: 6px 10px;
@@ -162,13 +221,7 @@ body {
   min-height: 1em;
 }
 
-.custom-data-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.custom-data-row span {
+.custom-data-row label {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -212,35 +265,6 @@ body {
   display: none;
 }
 
-/* Save & copy options */
-.settings .options {
-  gap: 10px;
-  border: 2px solid var(--baby-blue);
-  border-radius: 6px;
-  padding: 8px 10px 10px;
-}
-
-.settings .options legend {
-  padding: 0 6px;
-  font-size: 0.8rem;
-}
-
-.settings .check {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.settings .check input[type="checkbox"] {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  accent-color: var(--baby-blue-dark);
-  cursor: pointer;
-}
-
 /* Help indicator + tooltip */
 .help {
   position: relative;
@@ -251,16 +275,24 @@ body {
   width: 18px;
   height: 18px;
   color: var(--baby-blue-dark);
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: 50%;
   cursor: help;
+}
+
+.help:focus-visible {
+  outline: 2px solid var(--baby-blue-dark);
+  outline-offset: 2px;
 }
 
 .tooltip {
   position: absolute;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 8px);
   left: 0;
   width: max-content;
-  max-width: 220px;
-  padding: 6px 8px;
+  max-width: min(240px, calc(100vw - 64px));
+  padding: 7px 9px;
   background: var(--text);
   color: var(--white);
   font-size: 0.72rem;
@@ -279,10 +311,10 @@ body {
 .tooltip::after {
   content: "";
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 6px;
   border: 5px solid transparent;
-  border-top-color: var(--text);
+  border-bottom-color: var(--text);
 }
 
 .help:hover .tooltip,

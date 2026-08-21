@@ -33,101 +33,175 @@
 
       <section id="settings-tab" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
         <form id="settings-form" class="settings">
-          <div class="field">
-            <span>Save directory</span>
-            <div class="dir-row">
-              <input id="save-directory" type="text" placeholder="Default: Images folder" />
-              <button id="browse-directory" type="button">Browse…</button>
+          <div class="settings-list">
+            <div class="setting-card setting-card-field">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="save-directory">Save directory</label>
+                  <span class="help" tabindex="0" aria-label="More information about the save directory">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Choose where captures are stored. Leave this empty to use the
+                      Images folder beside Anonpic.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Where saved captures are written.</p>
+              </div>
+              <div class="setting-control">
+                <div class="dir-row">
+                  <input id="save-directory" type="text" placeholder="Default: Images folder" />
+                  <button id="browse-directory" type="button">Browse…</button>
+                </div>
+                <button id="restore-directory" type="button" class="restore-button">
+                  Restore default location
+                </button>
+              </div>
             </div>
-            <button id="restore-directory" type="button" class="restore-button">
-              Restore default location
-            </button>
-          </div>
-          <label class="field">
-            <span>Image format</span>
-            <select id="image-format">
-              <option value="png">PNG</option>
-              <option value="jpeg">JPEG</option>
-              <option value="bmp">BMP</option>
-            </select>
-          </label>
 
-          <fieldset class="field options">
-            <legend>Save &amp; copy options</legend>
+            <div class="setting-card setting-card-field">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="image-format">Image format</label>
+                  <span class="help" tabindex="0" aria-label="More information about image formats">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      PNG preserves transparency, JPEG produces smaller photos, and
+                      BMP favors broad Windows compatibility.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">File type used for saved captures.</p>
+              </div>
+              <div class="setting-control">
+                <select id="image-format">
+                  <option value="png">PNG</option>
+                  <option value="jpeg">JPEG</option>
+                  <option value="bmp">BMP</option>
+                </select>
+              </div>
+            </div>
 
-            <label class="check">
-              <span class="help" tabindex="0" aria-label="Help: copy to clipboard">
-                ⓘ
-                <span class="tooltip" role="tooltip">
-                  After a capture is grabbed, the cleaned image (metadata stripped) is
-                  copied to your clipboard so you can paste it anywhere.
-                </span>
-              </span>
+            <div class="setting-card setting-card-toggle">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="copy-to-clipboard">Copy to clipboard</label>
+                  <span class="help" tabindex="0" aria-label="More information about clipboard copying">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Places the cleaned capture on the Windows clipboard so it can
+                      be pasted after Anonpic closes.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Keep the latest capture ready to paste.</p>
+              </div>
               <input id="copy-to-clipboard" type="checkbox" />
-              <span>Copy to clipboard</span>
-            </label>
+            </div>
 
-            <label class="check">
-              <span class="help" tabindex="0" aria-label="Help: auto-save to Images folder">
-                ⓘ
-                <span class="tooltip" role="tooltip">
-                  Automatically save each cleaned capture to your save directory
-                  (the Images folder by default).
-                </span>
-              </span>
+            <div class="setting-card setting-card-toggle">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="auto-save">Auto-save to Images folder</label>
+                  <span class="help" tabindex="0" aria-label="More information about automatic saving">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Keeps each cleaned capture in the selected save directory.
+                      Turn this off for clipboard-only captures.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Keep a file after every capture.</p>
+              </div>
               <input id="auto-save" type="checkbox" />
-              <span>Auto-save to Images folder</span>
-            </label>
+            </div>
 
-            <label class="check">
-              <span class="help" tabindex="0" aria-label="Help: circular selection">
-                ⓘ
-                <span class="tooltip" role="tooltip">
-                  Draw the capture region as a circle instead of a rectangle while
-                  you drag-select an area.
-                </span>
-              </span>
+            <div class="setting-card setting-card-toggle">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="circular-selection">Circular selection</label>
+                  <span class="help" tabindex="0" aria-label="More information about circular selection">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Constrains the drag region to a circle and masks pixels outside
+                      it when the capture is encoded.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Capture a round region instead of a rectangle.</p>
+              </div>
               <input id="circular-selection" type="checkbox" />
-              <span>Circular selection</span>
-            </label>
+            </div>
 
-            <label class="check">
-              <span class="help" tabindex="0" aria-label="Help: ignore self">
-                ?
-                <span class="tooltip" role="tooltip">
-                  Hide the Anonpic window from screenshots. Leave unchecked to
-                  allow captures to include Anonpic itself.
-                </span>
-              </span>
+            <div class="setting-card setting-card-toggle">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="freeze-screen-on-capture">Freeze Screen On Capture</label>
+                  <span class="help" tabindex="0" aria-label="More information about freezing the screen on capture">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Shows a frozen snapshot of every display while you select the
+                      region, so moving video or games cannot change underneath the
+                      cursor. It does not pause the underlying apps.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Select from the exact frame that will be saved.</p>
+              </div>
+              <input id="freeze-screen-on-capture" type="checkbox" />
+            </div>
+
+            <div class="setting-card setting-card-toggle">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="ignore-self">Ignore Self</label>
+                  <span class="help" tabindex="0" aria-label="More information about hiding Anonpic from captures">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Uses Windows content protection to keep the Anonpic window out
+                      of captures. Support can vary by Windows version and display mode.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Hide the Anonpic window from screenshots.</p>
+              </div>
               <input id="ignore-self" type="checkbox" />
-              <span>Ignore Self</span>
-            </label>
+            </div>
 
-            <label class="check">
-              <span class="help" tabindex="0" aria-label="Help: fill image data with custom data">
-                ?
-                <span class="tooltip" role="tooltip">
-                  Strip image data first, then write replacement EXIF and metadata
-                  values from the Custom Data tab.
-                </span>
-              </span>
+            <div class="setting-card setting-card-toggle">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="fill-custom-data">Fill image data with custom data</label>
+                  <span class="help" tabindex="0" aria-label="More information about custom image data">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Strips the original data first, then writes supported EXIF and
+                      metadata values from the Custom Data tab.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Replace stripped fields with your saved values.</p>
+              </div>
               <input id="fill-custom-data" type="checkbox" />
-              <span>Fill image data with custom data</span>
-            </label>
+            </div>
 
-            <label class="check">
-              <span class="help" tabindex="0" aria-label="Help: show in Start Menu">
-                ⓘ
-                <span class="tooltip" role="tooltip">
-                  Keep an Anonpic shortcut in the Start Menu so it shows up when
-                  you search for it in Windows. Unchecking removes the shortcut
-                  (only if it is still the one Anonpic created).
-                </span>
-              </span>
+            <div class="setting-card setting-card-toggle">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="start-menu-shortcut">Show in Start Menu</label>
+                  <span class="help" tabindex="0" aria-label="More information about the Start Menu shortcut">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Keeps a per-user shortcut so Anonpic appears in Windows search.
+                      Anonpic only removes a shortcut it can verify it created.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Make Anonpic easy to find in Windows search.</p>
+              </div>
               <input id="start-menu-shortcut" type="checkbox" />
-              <span>Show in Start Menu</span>
-            </label>
-          </fieldset>
+            </div>
+          </div>
 
           <button type="submit">Save settings</button>
         </form>
@@ -137,15 +211,43 @@
       <section id="custom-data-tab" class="tab-panel" role="tabpanel" aria-labelledby="tab-custom-data" hidden>
         <form id="custom-data-form" class="settings custom-data">
           <div class="custom-data-list">
-            <label class="field custom-data-row">
-              <span>EXIF</span>
-              <input id="custom-exif" type="text" placeholder="Replacement EXIF value" />
-            </label>
+            <div class="setting-card setting-card-field custom-data-row">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="custom-exif">EXIF</label>
+                  <span class="help" tabindex="0" aria-label="More information about custom EXIF data">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Replaces supported camera make, model, software, and original
+                      date fields after the original EXIF data is removed.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Replacement value for supported EXIF fields.</p>
+              </div>
+              <div class="setting-control">
+                <input id="custom-exif" type="text" placeholder="Replacement EXIF value" />
+              </div>
+            </div>
 
-            <label class="field custom-data-row">
-              <span>Metadata</span>
-              <input id="custom-metadata" type="text" placeholder="Replacement metadata value" />
-            </label>
+            <div class="setting-card setting-card-field custom-data-row">
+              <div class="setting-copy">
+                <div class="setting-heading">
+                  <label for="custom-metadata">Metadata</label>
+                  <span class="help" tabindex="0" aria-label="More information about custom metadata">
+                    ⓘ
+                    <span class="tooltip" role="tooltip">
+                      Replaces supported author, software, title, comment, keyword,
+                      copyright, and host fields after cleaning.
+                    </span>
+                  </span>
+                </div>
+                <p class="setting-description">Replacement value for supported authoring fields.</p>
+              </div>
+              <div class="setting-control">
+                <input id="custom-metadata" type="text" placeholder="Replacement metadata value" />
+              </div>
+            </div>
           </div>
 
           <button id="generate-custom-data" type="button">Auto generate</button>

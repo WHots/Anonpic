@@ -17,6 +17,7 @@ const TARGET_VK: u32 = VK_SNAPSHOT as u32;
 /// queue until `WM_QUIT`. Blocks the calling thread, so run it on its own.
 pub fn listen()
 {
+    // SAFETY: a null module name requests the handle for the current executable.
     let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
 
     // SAFETY: the hook procedure is a valid `extern "system"` fn and the hook
@@ -30,10 +31,12 @@ pub fn listen()
 
     // SAFETY: `msg` is a local out-parameter; MSG is valid when zeroed.
     let mut msg: MSG = unsafe { std::mem::zeroed() };
+    // SAFETY: `msg` remains valid for writes throughout the message loop.
     while unsafe { GetMessageW(&mut msg, ptr::null_mut(), 0, 0) } > 0
     {
     }
 
+    // SAFETY: `hook` was returned by `SetWindowsHookExW` and is released once.
     unsafe { UnhookWindowsHookEx(hook) };
 }
 

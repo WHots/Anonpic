@@ -98,7 +98,10 @@ fn register_app_id()
             set_string(key, "IconUri", &icon);
         }
 
-        RegCloseKey(key);
+        if RegCloseKey(key) != 0
+        {
+            eprintln!("notify: failed to close the toast identity key");
+        }
     }
 }
 
@@ -111,7 +114,10 @@ unsafe fn set_string(key: HKEY, name: &str, value: &str)
 {
     let name = wide(name);
     let data = wide(value);
-    RegSetValueExW(key, name.as_ptr(), 0, REG_SZ, data.as_ptr() as *const u8, (data.len() * std::mem::size_of::<u16>()) as u32);
+    if RegSetValueExW(key, name.as_ptr(), 0, REG_SZ, data.as_ptr() as *const u8, (data.len() * std::mem::size_of::<u16>()) as u32) != 0
+    {
+        eprintln!("notify: failed to write a toast identity value");
+    }
 }
 
 
@@ -122,11 +128,13 @@ fn logo_path() -> Option<String>
 {
     if let Some(handle) = APP_HANDLE.get()
     {
-        if let Ok(resource) = handle.path().resolve("logo.png", BaseDirectory::Resource)
+        match handle.path().resolve("logo.png", BaseDirectory::Resource)
         {
-            if resource.exists()
+            Ok(resource) if resource.exists() => return Some(resource.to_string_lossy().into_owned()),
+            Ok(_) => {}
+            Err(_) =>
             {
-                return Some(resource.to_string_lossy().into_owned());
+                eprintln!("notify: failed to resolve the bundled logo path");
             }
         }
     }
@@ -148,11 +156,13 @@ fn icon_path() -> Option<String>
 {
     if let Some(handle) = APP_HANDLE.get()
     {
-        if let Ok(resource) = handle.path().resolve("icon.ico", BaseDirectory::Resource)
+        match handle.path().resolve("icon.ico", BaseDirectory::Resource)
         {
-            if resource.exists()
+            Ok(resource) if resource.exists() => return Some(resource.to_string_lossy().into_owned()),
+            Ok(_) => {}
+            Err(_) =>
             {
-                return Some(resource.to_string_lossy().into_owned());
+                eprintln!("notify: failed to resolve the bundled icon path");
             }
         }
     }

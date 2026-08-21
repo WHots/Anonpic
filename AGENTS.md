@@ -1,30 +1,34 @@
-# Global instructions
-
-## Coding style
-
-- Use Allman-style brackets (opening brace on its own line) for methods, structs, enums, `if`, and `for` loops.
-- Keep comments light. Follow standard Rust commenting: a brief description of intent along with its parameter info + return type info, plus explicit safety-concern notations (e.g. `// SAFETY:` on `unsafe` blocks). Comments should only be for global vars, structs, methods, impl, etc... there should be no comment inside of a method.
-- When making methods, private style methods should always be placed under public methods.
-- There should be 2 indents / free lines between each method, this also includes the method comment, this way to make it more spacey.
-- Avoid using multiple wrapper methods for small operations as this just lengthens the trail needed to follow to understand things.
-- When making a new method, make sure it doesn't already exist, if so prompt the user where at and for actions to take.
-- When creating helper methods, see if a suitable type already exists in the language's standard lib.
-- Private helper related methods should have basic error prints in instances where an error may occur.
-- Methods with many parameters should still be single lined, do not indent them.
-- When using print methods that may have many parameters, do not indent them, keep it single lined.
-- When writting methods with multiple params, there should be a single space after each comma before leading to the new param.
-- Try to avoid indenting in statements when there is multiple conditions or the .ok, .iter, .map, .max, etc..
-- When multiple statements or conditional ops are needed, put an indent between each one so it's better to read.
-
-## Coding Security and Performance
-
-- Large datasets, make sure they are properly stored, and free'd when needed.
-- Prefer performance and memory safety.
+# Project instructions
 
 ## Platform
 
-This project targets Windows only. Do not add cross-platform guards - omit `#[cfg(windows)]` / `#[cfg(not(windows))]` attributes and non-Windows fallback stubs. Assume the Windows API (via `windows-sys`) is always available.
+- Target Windows only and assume `windows-sys` APIs are available.
+- Do not add platform guards or non-Windows fallbacks.
 
-## Creating files
+## Before editing
 
-Prompt the user for confirmation before creating any new file. Describe the file's path and purpose, and wait for approval before writing it. Editing existing files does not require this prompt.
+- Search for an existing method before adding one. If an equivalent exists, tell the user where it is and ask whether to reuse or change it.
+- Prefer suitable Rust standard-library types and helpers over custom ones.
+- Ask for confirmation before creating a file. State its path and purpose; existing files may be edited without confirmation.
+
+## Rust style
+
+- Use Allman braces for methods, structs, enums, `if`, and `for` blocks.
+- Place public methods before related private methods. Leave two blank lines between method blocks, including their documentation.
+- Keep method signatures, ordinary argument lists, and print calls on one line. Closure and macro bodies may span lines.
+- Separate arguments with one space after each comma and omit the trailing comma.
+- Keep simple chains and multi-condition expressions compact. Builder chains containing closures may span lines.
+- Keep comments sparse and attach them to items such as globals, structs, methods, and `impl` blocks. Do not comment inside method bodies except for required safety notes.
+- Document an item's intent, parameters, and return value briefly. Mark every `unsafe` block with a `// SAFETY:` explanation.
+- When a private helper handles an unexpected failure locally, print a basic error message. Expected absence and normal control-flow results need not log.
+
+## Design, safety, and performance
+
+- Prefer direct, simple implementations; avoid unnecessary wrappers and over-engineering.
+- Keep structural types in the appropriate module file.
+- Prioritize memory safety and performance. Store large datasets efficiently and release resources when no longer needed.
+
+
+## Documentation
+
+- When changes are made that are associated with README.md anywhere, update that README  accordingly.

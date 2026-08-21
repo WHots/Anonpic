@@ -10,6 +10,7 @@ use crate::core::base::screen_grab::free_roam_screen_grab::start_free_roam_captu
 use crate::core::base::start_menu::start_menu_handler;
 use crate::core::base::tray::tray_handler;
 
+/// Builds and runs the Tauri application and its background capture services.
 fn main()
 {
     std::thread::spawn(||

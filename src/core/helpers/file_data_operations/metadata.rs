@@ -166,8 +166,7 @@ pub fn write_metadata(path: &str, metadata: &Metadata) -> bool
 }
 
 
-/// Writes an ASCII tag onto `image` when `value` is set, ignoring failures of a
-/// single tag.
+/// Writes an ASCII tag onto `image` when `value` is set and reports a failed tag.
 fn apply_ascii(image: *mut GpImage, propid: u32, value: &Option<String>)
 {
     let text = match value
@@ -178,12 +177,11 @@ fn apply_ascii(image: *mut GpImage, propid: u32, value: &Option<String>)
 
     let mut bytes: Vec<u8> = text.bytes().collect();
     bytes.push(0);
-    set_property(image, propid, TYPE_ASCII, &mut bytes);
+    let _ = set_property(image, propid, TYPE_ASCII, &mut bytes);
 }
 
 
-/// Writes a UTF-16 XP tag onto `image` when `value` is set, ignoring failures
-/// of a single tag.
+/// Writes a UTF-16 XP tag onto `image` when `value` is set and reports a failed tag.
 fn apply_xp_string(image: *mut GpImage, propid: u32, value: &Option<String>)
 {
     let text = match value
@@ -198,7 +196,7 @@ fn apply_xp_string(image: *mut GpImage, propid: u32, value: &Option<String>)
         bytes.extend_from_slice(&unit.to_le_bytes());
     }
     bytes.extend_from_slice(&[0, 0]);
-    set_property(image, propid, TYPE_BYTE, &mut bytes);
+    let _ = set_property(image, propid, TYPE_BYTE, &mut bytes);
 }
 
 
@@ -215,5 +213,11 @@ fn set_property(image: *mut GpImage, propid: u32, value_type: u16, bytes: &mut [
     };
 
     // SAFETY: `item.value` points into `bytes`, which outlives the call.
-    unsafe { GdipSetPropertyItem(image, &item) == 0 }
+    let applied = unsafe { GdipSetPropertyItem(image, &item) == 0 };
+    if !applied
+    {
+        eprintln!("metadata: failed to write property {propid:#06x}");
+    }
+
+    applied
 }

@@ -73,7 +73,16 @@ fn show_main_window(app: &AppHandle)
         }
     };
 
-    let _ = window.unminimize();
-    let _ = window.show();
-    let _ = window.set_focus();
+    if window.unminimize().is_err()
+    {
+        eprintln!("tray: failed to restore the main window");
+    }
+    if window.show().is_err()
+    {
+        eprintln!("tray: failed to show the main window");
+    }
+    if window.set_focus().is_err()
+    {
+        eprintln!("tray: failed to focus the main window");
+    }
 }

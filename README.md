@@ -46,6 +46,9 @@ It is built with **Tauri v2** (Rust backend + WebView UI) and talks to the OS di
 - 🎲 **Random file names** — saved files get an unguessable, cryptographically random name (see below).
 - 🖼️ **Format choice** — save as **PNG**, **JPEG**, or **BMP**.
 - 🔔 **Native toasts** — a Windows notification confirms each save / clipboard copy.
+- **Freeze Screen On Capture** - hold every display on one captured frame while selecting fast-moving video or gameplay.
+- **System tray controls** - reopen Anonpic, start a capture, or quit while the main window is hidden.
+- **Start Menu integration** - optionally keep a verified Anonpic shortcut in the per-user Start Menu.
 
 - **Circle crop mode** - toggle circular selection/cropping when you want a round capture instead of the normal rectangular region.
 - **Custom EXIF + metadata rewriting** - optionally fill stripped image data with your own saved replacement values, or auto-generate unique random values for each data type.
@@ -54,12 +57,12 @@ It is built with **Tauri v2** (Rust backend + WebView UI) and talks to the OS di
 ## How it works
 
 1. **Trigger** — the global <kbd>Print Screen</kbd> hook (or the in-app button) starts a capture.
-2. **Snapshot** — the entire virtual desktop is snapshotted up front, *then* the dimmed overlay is shown, so the overlay itself never appears in your screenshot.
+2. **Frame** — with **Freeze Screen On Capture** enabled, the entire virtual desktop is snapshotted and displayed as an opaque freeze frame. With it disabled, the desktop remains live during selection.
 3. **Select** — you drag a rectangle; the live `W × H` size is drawn next to the cursor.
-4. **Crop & clean** — the chosen region is cropped from the snapshot, encoded to your chosen format, and run through the EXIF + metadata strippers.
+4. **Capture & clean** — frozen selections are cropped from the displayed frame; live selections are captured after the overlay closes. The result is encoded and run through the EXIF + metadata strippers.
 5. **Dispatch** — depending on your settings, the cleaned image is saved to disk, copied to the clipboard, or both, and a toast confirms it.
 
-> Current behavior: **Ignore Self** controls whether the Anonpic window is hidden from screenshots, **Circle crop mode** supports round captures, and custom data filling strips first before writing saved replacement EXIF and metadata values.
+> Current behavior: **Freeze Screen On Capture** displays the exact frame that will be saved without pausing the underlying app. **Ignore Self** controls whether the Anonpic window is hidden, **Circle crop mode** supports round captures, and custom data filling strips first before writing replacement values.
 
 ## Privacy: what gets removed
 
@@ -119,7 +122,9 @@ The **Settings** tab persists to `config/app.cfg` and controls:
 | **Copy to clipboard** | After a capture, copy the cleaned image to the clipboard. |
 | **Auto-save to Images folder** | Keep the cleaned image on disk. With this off (and clipboard on), the file is used only as a staging step and removed after copying. |
 | **Circular selection** | Use the circle crop/selection mode instead of the normal rectangle. |
+| **Freeze Screen On Capture** | Display and select from one frozen virtual-desktop frame. Enabled by default; the underlying apps continue running. |
 | **Ignore Self** | Hide the Anonpic window from screenshots when enabled. Leave off to allow Anonpic to appear in captures. |
+| **Show in Start Menu** | Keep an Anonpic shortcut in the per-user Start Menu so it appears in Windows search. |
 | **Fill image data with custom data** | After stripping EXIF and metadata, write your saved Custom Data values into the saved image. |
 | **Custom Data tab** | Save replacement values for EXIF and metadata, or auto-generate a unique random value for each entry. |
 
@@ -135,8 +140,10 @@ The **Settings** tab persists to `config/app.cfg` and controls:
 │       ├── base/
 │       │   ├── configs/              # settings model + config/app.cfg persistence
 │       │   ├── notify/               # native Windows toast notifications
-│       │   ├── saves/                # save cleaned image + clipboard copy (CF_DIB)
-│       │   └── screen_grab/          # free-roam region-capture overlay
+│       │   ├── saves/                # save workflow + image/clipboard helpers
+│       │   ├── screen_grab/          # free-roam region-capture overlay
+│       │   ├── start_menu/           # verified per-user Start Menu shortcut
+│       │   └── tray/                 # system tray icon and controls
 │       ├── helpers/
 │       │   ├── file_data_operations/ # EXIF + metadata stripping via GDI+
 │       │   ├── file_operations/      # filesystem + random filename helpers
